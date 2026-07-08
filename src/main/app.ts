@@ -69,6 +69,7 @@ function createWindow(): void {
     skipTaskbar: true,
     resizable: false,
     hasShadow: false,
+    type: 'panel', // macOS floating panel behavior
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -77,13 +78,15 @@ function createWindow(): void {
 
   // Ignore mouse events on transparent areas by default, but allow click forwarding
   mainWindow.setIgnoreMouseEvents(true, { forward: true });
+  mainWindow.setFullScreenable(false);
+  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
 
   mainWindow.on('ready-to-show', () => {
     if (mainWindow) {
       mainWindow.show();
       // Ensure always on top stands
       mainWindow.setAlwaysOnTop(true, 'screen-saver');
-      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
 
       // Open DevTools in development mode
       if (is.dev) {
