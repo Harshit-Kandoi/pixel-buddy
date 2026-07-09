@@ -3,8 +3,6 @@ import buddyVideo from '../assets/buddy.mp4';
 
 interface BuddyProps {
   state: string;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
   customVideoPath?: string | null;
   keyingMode?: 'auto' | 'native' | 'none';
   debugKeyer?: boolean;
@@ -13,10 +11,137 @@ interface BuddyProps {
   onFileDrop?: (filePath: string) => void;
 }
 
+// ─── WebGL Shader Sources ────────────────────────────────────────────────────
+
+const VERT_SRC = `
+  attribute vec2 a_pos;
+  attribute vec2 a_uv;
+  varying vec2 v_uv;
+  void main() {
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+    v_uv = a_uv;
+  }
+`;
+
+// GPU chroma-key: samples background color from top-left corner of texture,
+// removes pixels within threshold distance, smooth alpha at edge to avoid fringing.
+const FRAG_SRC = `
+  precision mediump float;
+  uniform sampler2D u_tex;
+  uniform vec3 u_bg;
+  uniform float u_thr;
+  uniform float u_debug;
+  varying vec2 v_uv;
+  void main() {
+    vec4 c = texture2D(u_tex, v_uv);
+    float d = abs(c.r - u_bg.r) + abs(c.g - u_bg.g) + abs(c.b - u_bg.b);
+    if (d < u_thr) {
+      if (u_debug > 0.5) {
+        gl_FragColor = vec4(1.0, 0.0, 1.0, 0.6);
+      } else {
+        float a = smoothstep(u_thr * 0.4, u_thr, d);
+        gl_FragColor = vec4(c.rgb, a);
+      }
+    } else {
+      gl_FragColor = c;
+    }
+  }
+`;
+
+// ─── WebGL Helpers ───────────────────────────────────────────────────────────
+
+interface GLState {
+  gl: WebGLRenderingContext;
+  program: WebGLProgram;
+  texture: WebGLTexture;
+  uBg: WebGLUniformLocation;
+  uThr: WebGLUniformLocation;
+  uDebug: WebGLUniformLocation;
+}
+
+function buildShader(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
+  const s = gl.createShader(type)!;
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error('Shader error:', gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+function initGL(canvas: HTMLCanvasElement): GLState | null {
+  const gl = canvas.getContext('webgl', { premultipliedAlpha: false, alpha: true });
+  if (!gl) return null;
+
+  const vs = buildShader(gl, gl.VERTEX_SHADER, VERT_SRC);
+  const fs = buildShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+  if (!vs || !fs) return null;
+
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error('Program link error:', gl.getProgramInfoLog(prog));
+    return null;
+  }
+  gl.useProgram(prog);
+
+  // Full-screen quad in clip space
+  const buf = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    // pos(x,y)  uv(u,v)
+    -1, -1,  0, 1,
+     1, -1,  1, 1,
+    -1,  1,  0, 0,
+     1,  1,  1, 0,
+  ]), gl.STATIC_DRAW);
+
+  const stride = 4 * Float32Array.BYTES_PER_ELEMENT;
+  const posLoc = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, stride, 0);
+
+  const uvLoc = gl.getAttribLocation(prog, 'a_uv');
+  gl.enableVertexAttribArray(uvLoc);
+  gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+
+  const texture = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.uniform1i(gl.getUniformLocation(prog, 'u_tex'), 0);
+
+  // Cache uniform locations — fetching per-frame is a performance killer
+  const uBg = gl.getUniformLocation(prog, 'u_bg')!;
+  const uThr = gl.getUniformLocation(prog, 'u_thr')!;
+  const uDebug = gl.getUniformLocation(prog, 'u_debug')!;
+
+  return { gl, program: prog, texture, uBg, uThr, uDebug };
+}
+
+// Sample background color from video corners via tiny offscreen canvas
+function sampleBg(video: HTMLVideoElement): [number, number, number] {
+  try {
+    const sc = document.createElement('canvas');
+    sc.width = 2; sc.height = 2;
+    const ctx = sc.getContext('2d')!;
+    ctx.drawImage(video, 0, 0, 2, 2);
+    const p = ctx.getImageData(0, 0, 1, 1).data;
+    return [p[0] / 255, p[1] / 255, p[2] / 255];
+  } catch {
+    return [0, 0.7, 0.25]; // default green-screen fallback
+  }
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export const Buddy: React.FC<BuddyProps> = ({
   state,
-  onMouseEnter,
-  onMouseLeave,
   customVideoPath = null,
   keyingMode = 'auto',
   debugKeyer = false,
@@ -27,258 +152,165 @@ export const Buddy: React.FC<BuddyProps> = ({
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const frameCacheRef = useRef<Map<number, ImageData>>(new Map());
+  const glStateRef = useRef<GLState | null>(null);
+  const bgRef = useRef<[number, number, number]>([0, 0.7, 0.25]);
+  const bgTickRef = useRef(0);
+  const rafRef = useRef<number>(0);
 
-  // Determine media source
   const mediaSrc = customVideoPath ? `buddy-media://${customVideoPath}` : buddyVideo;
   const isImage = customVideoPath ? /\.(gif|png|webp|apng)$/i.test(customVideoPath) : false;
 
-  // Determine animation classes
-  let animClass = 'buddy-bounce';
-  if (state === 'POPUP') {
-    animClass = 'buddy-walk-in';
-  }
-  if (clickAnimClass) {
-    animClass = clickAnimClass;
-  }
+  // Animation class goes on the wrapper div, NOT the media element
+  // This prevents GIFs from rotating/distorting on click
+  let containerAnim = 'buddy-bounce';
+  if (state === 'POPUP') containerAnim = 'buddy-walk-in';
+  if (clickAnimClass) containerAnim = clickAnimClass;
 
-  // Clear frame cache when source file, keying mode, or debug status changes
+  // Re-init when source or keying mode changes
   useEffect(() => {
-    frameCacheRef.current.clear();
+    bgTickRef.current = 0;
+    glStateRef.current = null; // will be re-created in next effect run
   }, [customVideoPath, keyingMode, debugKeyer]);
 
   useEffect(() => {
-    // If it's a static image or GIF, we don't need the frame processing loop
     if (isImage || videoError) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    // Attempt WebGL — fall back to 2D canvas if unavailable
+    let gls: GLState | null = null;
+    if (keyingMode === 'auto') {
+      gls = initGL(canvas);
+      glStateRef.current = gls;
+      if (!gls) console.warn('WebGL not available — falling back to 2D canvas chroma key');
+    }
 
-    let animationFrameId: number;
+    const draw = () => {
+      rafRef.current = requestAnimationFrame(draw);
 
-    // Helper to extract unique background colors from corners and border midpoints
-    const sampleBackgroundColors = (rawBuf: Uint8ClampedArray, w: number, h: number): [number, number, number][] => {
-      const samples: [number, number, number][] = [];
-      const coords = [
-        [0, 0],
-        [w - 1, 0],
-        [0, h - 1],
-        [w - 1, h - 1],
-        [Math.floor(w / 2), 0],
-        [Math.floor(w / 2), h - 1],
-        [0, Math.floor(h / 2)],
-        [w - 1, Math.floor(h / 2)]
-      ];
+      if (!video || video.readyState < 2) return; // video not decoded yet
 
-      for (const [cx, cy] of coords) {
-        const idx = (cy * w + cx) * 4;
-        const cr = rawBuf[idx];
-        const cg = rawBuf[idx + 1];
-        const cb = rawBuf[idx + 2];
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (!vw || !vh) return;
 
-        // Deduplicate very similar colors
-        const isDup = samples.some(([sr, sg, sb]) =>
-          Math.abs(cr - sr) + Math.abs(cg - sg) + Math.abs(cb - sb) < 15
-        );
+      // Scale canvas to video dimensions (capped at 160px)
+      const maxDim = 160;
+      const scale = Math.min(1, maxDim / Math.max(vw, vh));
+      const tw = Math.round(vw * scale);
+      const th = Math.round(vh * scale);
 
-        if (!isDup) {
-          samples.push([cr, cg, cb]);
+      if (canvas.width !== tw || canvas.height !== th) {
+        canvas.width = tw;
+        canvas.height = th;
+        canvas.style.width = `${tw}px`;
+        canvas.style.height = `${th}px`;
+        bgTickRef.current = 0;
+        if (gls) gls.gl.viewport(0, 0, tw, th);
+      }
+
+      if (keyingMode === 'auto' && gls) {
+        // ── GPU path ────────────────────────────────────────
+        const { gl, texture, uBg, uThr, uDebug } = gls;
+
+        // Re-sample background color every ~60 frames (~2s)
+        if (bgTickRef.current % 60 === 0) {
+          bgRef.current = sampleBg(video);
         }
-      }
+        bgTickRef.current++;
 
-      return samples;
-    };
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
 
-    const processFrame = () => {
-      if (video.paused || video.ended) {
-        animationFrameId = requestAnimationFrame(processFrame);
-        return;
-      }
+        const [r, g, b] = bgRef.current;
+        gl.uniform3f(uBg, r, g, b);
+        gl.uniform1f(uThr, 0.22);
+        gl.uniform1f(uDebug, debugKeyer ? 1.0 : 0.0);
 
-      // Match canvas dimensions to the loaded video with downscaling limit (max 150px)
-      if (video.videoWidth > 0) {
-        const maxDim = 150;
-        let targetW = video.videoWidth;
-        let targetH = video.videoHeight;
-        if (targetW > maxDim || targetH > maxDim) {
-          const ratio = Math.min(maxDim / targetW, maxDim / targetH);
-          targetW = Math.round(targetW * ratio);
-          targetH = Math.round(targetH * ratio);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      } else if (keyingMode === 'auto' && !gls) {
+        // ── CPU 2D-canvas fallback ───────────────────────────
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, tw, th);
+        ctx.drawImage(video, 0, 0, tw, th);
+        const img = ctx.getImageData(0, 0, tw, th);
+        const d = img.data;
+        const bgR = d[0], bgG = d[1], bgB = d[2];
+        const thr = 60;
+        for (let i = 0; i < d.length; i += 4) {
+          const dist = Math.abs(d[i] - bgR) + Math.abs(d[i+1] - bgG) + Math.abs(d[i+2] - bgB);
+          if (dist < thr) {
+            if (debugKeyer) { d[i]=255; d[i+1]=0; d[i+2]=255; d[i+3]=140; }
+            else d[i+3] = Math.round((dist / thr) * 255 * 0.6);
+          }
         }
+        ctx.putImageData(img, 0, 0);
 
-        if (canvas.width !== targetW || canvas.height !== targetH) {
-          canvas.width = targetW;
-          canvas.height = targetH;
-          frameCacheRef.current.clear(); // clear cache on resize
-        }
-      }
-
-      const w = canvas.width;
-      const h = canvas.height;
-
-      if (w === 0 || h === 0) {
-        animationFrameId = requestAnimationFrame(processFrame);
-        return;
-      }
-
-      // Unique frame index (estimating 30fps)
-      const frameIndex = Math.round(video.currentTime * 30);
-
-      // Hit cache if possible to bypass heavy pixel operations
-      if (keyingMode !== 'none' && frameCacheRef.current.has(frameIndex)) {
-        const cachedData = frameCacheRef.current.get(frameIndex)!;
-        ctx.putImageData(cachedData, 0, 0);
       } else {
-        // Draw raw frame to canvas
-        ctx.drawImage(video, 0, 0, w, h);
-
-        if (keyingMode === 'auto') {
-          const imgData = ctx.getImageData(0, 0, w, h);
-          const data = imgData.data;
-          const visited = new Uint8Array(w * h);
-          const queue = new Int32Array(w * h);
-          let head = 0;
-          let tail = 0;
-
-          // Self-calibrate background colors from borders of raw buffer
-          const bgColors = sampleBackgroundColors(data, w, h);
-
-          // Coordinate enqueue function
-          const enqueue = (x: number, y: number) => {
-            if (x >= 0 && x < w && y >= 0 && y < h) {
-              const idx = y * w + x;
-              if (!visited[idx]) {
-                visited[idx] = 1;
-                queue[tail++] = idx;
-              }
-            }
-          };
-
-          // Seed all border pixels
-          for (let x = 0; x < w; x++) {
-            enqueue(x, 0);
-            enqueue(x, h - 1);
-          }
-          for (let y = 0; y < h; y++) {
-            enqueue(0, y);
-            enqueue(w - 1, y);
-          }
-
-          // BFS traversal to key dynamic background colors
-          while (head < tail) {
-            const idx = queue[head++];
-            const x = idx % w;
-            const y = Math.floor(idx / w);
-            const rIdx = idx * 4;
-
-            const r = data[rIdx];
-            const g = data[rIdx + 1];
-            const b = data[rIdx + 2];
-
-            // Match if pixel is close to any sampled background color (L1 distance < 50)
-            const isBg = bgColors.some(([br, bg, bb]) =>
-              Math.abs(r - br) + Math.abs(g - bg) + Math.abs(b - bb) < 50
-            );
-
-            if (isBg) {
-              if (debugKeyer) {
-                // Visualize pixels: highlight keyed backgrounds in magenta
-                data[rIdx] = 255;
-                data[rIdx + 1] = 0;
-                data[rIdx + 2] = 255;
-                data[rIdx + 3] = 140;
-              } else {
-                data[rIdx + 3] = 0; // key out background pixel
-              }
-
-              enqueue(x + 1, y);
-              enqueue(x - 1, y);
-              enqueue(x, y + 1);
-              enqueue(x, y - 1);
-            }
-          }
-
-          ctx.putImageData(imgData, 0, 0);
-
-          // Store a copy in the frame cache
-          const cacheCopy = new ImageData(new Uint8ClampedArray(imgData.data), w, h);
-          frameCacheRef.current.set(frameIndex, cacheCopy);
-        } else if (keyingMode === 'native') {
-          // Native transparency - just extract frame to save CPU
-          const imgData = ctx.getImageData(0, 0, w, h);
-          const cacheCopy = new ImageData(new Uint8ClampedArray(imgData.data), w, h);
-          frameCacheRef.current.set(frameIndex, cacheCopy);
-        }
+        // ── No keying / native alpha ─────────────────────────
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, tw, th);
+        ctx.drawImage(video, 0, 0, tw, th);
       }
-
-      animationFrameId = requestAnimationFrame(processFrame);
     };
 
-    // Attempt video playback
-    video.play().catch((err) => console.warn("Video play interrupted:", err));
-    processFrame();
+    video.play().catch((e) => console.warn('Video play interrupted:', e));
+    rafRef.current = requestAnimationFrame(draw);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(rafRef.current);
     };
   }, [isImage, videoError, mediaSrc, keyingMode, debugKeyer]);
 
-  const renderFallbackSVG = () => {
-    const svgStyle = { filter: `drop-shadow(0 10px 15px rgba(0,0,0,0.3))` };
+  // ─── Fallback SVG avatars ────────────────────────────────────────────────
+
+  const svgShadow = { filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.35))' };
+
+  const renderFallback = () => {
     switch (state) {
       case 'BREAK':
         return (
-          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgStyle}>
+          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgShadow}>
             <rect x="25" y="30" width="50" height="50" rx="15" fill="#10b981" />
-            <rect x="20" y="45" width="60" height="25" rx="8" fill="#047857" />
             <circle cx="40" cy="50" r="5" fill="#1f2937" />
             <circle cx="60" cy="50" r="5" fill="#1f2937" />
-            <polygon points="30,45 70,45 68,54 55,54 52,48 48,48 45,54 32,54" fill="#1e293b" />
-            <line x1="30" y1="47" x2="70" y2="47" stroke="#94a3b8" strokeWidth="2" />
             <path d="M 45 62 Q 50 67 55 62" stroke="#1f2937" strokeWidth="3" fill="none" strokeLinecap="round" />
             <circle cx="32" cy="58" r="4" fill="#fb7185" opacity="0.6" />
             <circle cx="68" cy="58" r="4" fill="#fb7185" opacity="0.6" />
           </svg>
         );
-
       case 'IDLE':
         return (
-          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgStyle}>
+          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgShadow}>
             <rect x="25" y="35" width="50" height="45" rx="15" fill="#64748b" />
             <path d="M 35 52 Q 40 56 45 52" stroke="#1e293b" strokeWidth="3" fill="none" strokeLinecap="round" />
             <path d="M 55 52 Q 60 56 65 52" stroke="#1e293b" strokeWidth="3" fill="none" strokeLinecap="round" />
-            <circle cx="50" cy="62" r="3" fill="#1e293b" />
-            <text x="72" y="30" fill="#94a3b8" fontSize="12" fontWeight="bold" className="buddy-bounce">Z</text>
-            <text x="80" y="20" fill="#cbd5e1" fontSize="16" fontWeight="bold" style={{ animationDelay: '0.5s' }} className="buddy-bounce">Z</text>
+            <text x="72" y="30" fill="#94a3b8" fontSize="12" fontWeight="bold">Z</text>
+            <text x="80" y="20" fill="#cbd5e1" fontSize="16" fontWeight="bold">Z</text>
           </svg>
         );
-
       case 'POPUP':
         return (
-          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgStyle}>
+          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgShadow}>
             <rect x="25" y="30" width="50" height="50" rx="15" fill="#8b5cf6" />
-            <rect x="30" y="20" width="10" height="15" rx="5" fill="#a78bfa" />
-            <rect x="60" y="20" width="10" height="15" rx="5" fill="#a78bfa" />
             <circle cx="40" cy="45" r="6" fill="white" />
             <circle cx="40" cy="45" r="3" fill="#1e293b" />
             <circle cx="60" cy="45" r="6" fill="white" />
             <circle cx="60" cy="45" r="3" fill="#1e293b" />
-            <path d="M 25 55 Q 12 40 10 30" stroke="#8b5cf6" strokeWidth="10" strokeLinecap="round" fill="none" />
             <path d="M 45 58 Q 50 66 55 58 Z" fill="#ef4444" stroke="#1e293b" strokeWidth="2" />
-            <circle cx="34" cy="54" r="4" fill="#ec4899" opacity="0.6" />
-            <circle cx="66" cy="54" r="4" fill="#ec4899" opacity="0.6" />
           </svg>
         );
-
       default:
         return (
-          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgStyle}>
+          <svg width="100" height="100" viewBox="0 0 100 100" className="buddy-media" style={svgShadow}>
             <rect x="25" y="30" width="50" height="50" rx="15" fill="#8b5cf6" />
-            <path d="M 50 30 C 50 20, 60 15, 62 15 C 62 15, 55 25, 50 30" fill="#a78bfa" />
             <circle cx="42" cy="48" r="5" fill="#1e293b" />
             <circle cx="58" cy="48" r="5" fill="#1e293b" />
             <path d="M 47 58 Q 50 61 53 58" stroke="#1e293b" strokeWidth="2" fill="none" strokeLinecap="round" />
@@ -289,30 +321,24 @@ export const Buddy: React.FC<BuddyProps> = ({
     }
   };
 
-  const buddyMediaStyle = {
-    filter: `drop-shadow(0 10px 15px rgba(0, 0, 0, 0.3))`
+  const mediaCss: React.CSSProperties = {
+    filter: 'drop-shadow(0 8px 14px rgba(0,0,0,0.32))',
+    display: 'block',
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
+  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file && onFileDrop) {
-      const filePath = (file as any).path;
-      if (filePath) {
-        onFileDrop(filePath);
-      }
+      const fp = (file as any).path;
+      if (fp) onFileDrop(fp);
     }
   };
 
   return (
-    <div 
-      className={`buddy-container ${animClass}`}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+    <div
+      className={`buddy-container ${containerAnim}`}
       onMouseDown={onMouseDown}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -322,12 +348,9 @@ export const Buddy: React.FC<BuddyProps> = ({
           <img
             src={mediaSrc}
             className="buddy-media"
-            style={buddyMediaStyle}
+            style={mediaCss}
             alt="Buddy Companion"
-            onError={() => {
-              console.warn('Transparent buddy image failed to load, falling back to SVG.');
-              setVideoError(true);
-            }}
+            onError={() => { console.warn('Image load failed, falling back.'); setVideoError(true); }}
           />
         ) : (
           <>
@@ -339,20 +362,13 @@ export const Buddy: React.FC<BuddyProps> = ({
               muted
               playsInline
               crossOrigin="anonymous"
-              onError={() => {
-                console.warn('Transparent buddy video failed to load, falling back to SVG.');
-                setVideoError(true);
-              }}
+              onError={() => { console.warn('Video load failed, falling back.'); setVideoError(true); }}
             />
-            <canvas
-              ref={canvasRef}
-              className="buddy-media"
-              style={buddyMediaStyle}
-            />
+            <canvas ref={canvasRef} className="buddy-media" style={mediaCss} />
           </>
         )
       ) : (
-        renderFallbackSVG()
+        renderFallback()
       )}
     </div>
   );

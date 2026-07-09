@@ -33,9 +33,25 @@ export class SettingsManager {
       } else {
         this.save(this.settings);
       }
+      this.checkDailyReset();
     } catch (error) {
       console.error('Failed to load settings:', error);
       this.settings = { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  private checkDailyReset(): void {
+    const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+    if (this.settings.hydrationLastResetDate !== todayStr) {
+      console.log(`Daily Reset: Resetting stats and water count. Prev reset: ${this.settings.hydrationLastResetDate}, Today: ${todayStr}`);
+      this.save({
+        hydrationDrankToday: 0,
+        statsFocusMinutesToday: 0,
+        statsBreaksCompletedToday: 0,
+        statsBreaksSkippedToday: 0,
+        statsBreaksSnoozedToday: 0,
+        hydrationLastResetDate: todayStr,
+      });
     }
   }
 

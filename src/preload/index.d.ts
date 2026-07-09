@@ -20,12 +20,20 @@ declare global {
       setIgnoreMouseEvents(ignore: boolean): void
       resize(width: number, height: number): void
       onShowSettings(callback: () => void): () => void
+      setSettingsVisible(visible: boolean): void
+      setDialogueActive(active: boolean): void
+      setWidgetsVisible(visible: boolean): void
+      logHydration(): void
+      snoozeHydration(): void
+      dismissHydration(): void
       dragStart(): void
       dragMove(): void
       dragEnd(): void
       selectMedia(): Promise<string | null>
       saveCustomMedia(filePath: string): Promise<string | null>
       resetMedia(): Promise<null>
+      getMediaLibrary(): Promise<string[]>
+      deleteMediaLibraryItem(filePath: string): Promise<string[]>
       selectSound(): Promise<string | null>
       resetSound(): Promise<null>
       quit(): void

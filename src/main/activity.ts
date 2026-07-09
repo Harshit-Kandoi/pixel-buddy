@@ -118,6 +118,10 @@ export class ActivityMonitor {
 
   public stop(): void {
     this.isTracking = false;
+    this.stopGlobalHook();
+  }
+
+  private stopGlobalHook(): void {
     if (this.isListening && uIOhook) {
       try {
         uIOhook.stop();
@@ -134,12 +138,20 @@ export class ActivityMonitor {
    * Updates scores and handles idle transitions.
    * Returns true if user was active this second, false if idle.
    */
-  public tick(isStateWorking: boolean): { isActiveThisSecond: boolean; currentMinuteScore: number } {
+  public tick(
+    isStateWorking: boolean,
+    smartMonitoringEnabled = true
+  ): { isActiveThisSecond: boolean; currentMinuteScore: number } {
     let activeThisSecond = false;
-    const hasPermission = this.checkAccessibilityPermission();
+    const hasPermission = this.checkAccessibilityPermission() && smartMonitoringEnabled;
 
-    // If global hook is running and we have permission
-    if (this.isListening && hasPermission) {
+    if (!smartMonitoringEnabled) {
+      if (this.isListening) {
+        this.stopGlobalHook();
+      }
+      activeThisSecond = true;
+      this.continuousIdleSeconds = 0;
+    } else if (this.isListening && hasPermission) {
       if (this.currentScore > 0) {
         activeThisSecond = true;
         this.minuteScore += this.currentScore;

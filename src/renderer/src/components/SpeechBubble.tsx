@@ -6,10 +6,9 @@ interface SpeechBubbleProps {
   workDuration: number;
   tip: string;
   children?: React.ReactNode;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
   customDialogue?: string | null;
   onMouseDown?: (e: React.MouseEvent) => void;
+  userName?: string | null;
 }
 
 export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
@@ -18,11 +17,12 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
   workDuration,
   tip,
   children,
-  onMouseEnter,
-  onMouseLeave,
   customDialogue = null,
   onMouseDown,
+  userName = null,
 }) => {
+  const displayName = userName && userName.trim() ? userName.trim() : 'there';
+
   const getDialogueText = () => {
     if (customDialogue) return customDialogue;
     switch (state) {
@@ -33,7 +33,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
         if (skipsCount >= 3) {
           return "I'm getting worried :(\nPlease consider taking a short break now...";
         }
-        return `Hey Harshit!\nYou've been focused for ${workDuration} minutes.\nTake a ${5} minute break?`;
+        return `Hey ${displayName}!\nYou've been focused for ${workDuration} minutes.\nTime for a quick break?`;
 
       case 'IDLE':
         return "Zzz... Oh, are you stepping away? Take your time!";
@@ -49,8 +49,6 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
   return (
     <div 
       className="speech-bubble non-draggable"
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
       onMouseDown={onMouseDown}
     >
       <div className="speech-text">{getDialogueText()}</div>

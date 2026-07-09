@@ -4,6 +4,9 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 
+// Suppress harmless Windows GPU shader cache permission errors in console
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+
 // Register 'buddy-media' as standard, secure, and support fetch
 protocol.registerSchemesAsPrivileged([
   { scheme: 'buddy-media', privileges: { standard: true, secure: true, supportFetchAPI: true } }
@@ -19,9 +22,38 @@ let activityMonitor: ActivityMonitor;
 let scheduler: Scheduler;
 let trayManager: TrayManager;
 
+// Enforce single instance — prevents duplicate windows in production.
+// In development (npm run dev), hot-reload can spawn new Electron processes,
+// so we skip the lock to avoid immediately killing the new instance.
+if (!is.dev) {
+  const gotLock = app.requestSingleInstanceLock();
+  if (!gotLock) {
+    app.quit();
+    process.exit(0);
+  }
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      mainWindow.webContents.send('window:show-settings');
+    }
+  });
+}
+
 // Window size constants
 const DEFAULT_WIDTH = 320;
 const DEFAULT_HEIGHT = 350;
+
+let lastIgnoreState: boolean | null = null;
+let lastForwardState: boolean | null = null;
+
+function safeSetIgnoreMouseEvents(win: BrowserWindow, ignore: boolean, forward: boolean = false): void {
+  if (lastIgnoreState !== ignore || lastForwardState !== forward) {
+    win.setIgnoreMouseEvents(ignore, { forward });
+    lastIgnoreState = ignore;
+    lastForwardState = forward;
+  }
+}
 
 function getBottomRightPosition(width: number, height: number): { x: number; y: number } {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -57,7 +89,7 @@ function createWindow(): void {
     y = pos.y;
   }
 
-  mainWindow = new BrowserWindow({
+  const winOptions: Electron.BrowserWindowConstructorOptions = {
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
     x,
@@ -66,32 +98,42 @@ function createWindow(): void {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    skipTaskbar: true,
+    skipTaskbar: false,
     resizable: false,
     hasShadow: false,
-    type: 'panel', // macOS floating panel behavior
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: false,
     },
-  });
+  };
+
+  // macOS floating panel — keeps above full-screen apps
+  if (process.platform === 'darwin') {
+    (winOptions as any).type = 'panel';
+  }
+
+  mainWindow = new BrowserWindow(winOptions);
 
   // Ignore mouse events on transparent areas by default, but allow click forwarding
-  mainWindow.setIgnoreMouseEvents(true, { forward: true });
+  safeSetIgnoreMouseEvents(mainWindow, true, true);
   mainWindow.setFullScreenable(false);
-  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+
+  // Overlay on all workspaces and full-screen apps
+  if (process.platform === 'darwin') {
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  } else {
+    mainWindow.setVisibleOnAllWorkspaces(true);
+  }
 
   mainWindow.on('ready-to-show', () => {
     if (mainWindow) {
       mainWindow.show();
-      // Ensure always on top stands
-      mainWindow.setAlwaysOnTop(true, 'screen-saver');
-      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
-
-      // Open DevTools in development mode
-      if (is.dev) {
-        mainWindow.webContents.openDevTools({ mode: 'detach' });
+      // Use the highest alwaysOnTop level to overlay above all other apps (including full-screen)
+      mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      if (process.platform === 'darwin') {
+        mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
       }
+      // DevTools intentionally removed — was causing dev tools to pop on every launch
     }
   });
 
@@ -146,7 +188,7 @@ app.whenReady().then(() => {
     () => {
       if (mainWindow) {
         mainWindow.show();
-        mainWindow.setAlwaysOnTop(true, 'screen-saver');
+        mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
         mainWindow.webContents.send('window:show-settings');
       }
     },
@@ -210,14 +252,26 @@ app.whenReady().then(() => {
     scheduler.handleReset();
   });
 
+  ipcMain.on('scheduler:log-hydration', () => {
+    scheduler.handleLogHydration();
+  });
+
+  ipcMain.on('scheduler:snooze-hydration', () => {
+    scheduler.handleSnoozeHydration();
+  });
+
+  ipcMain.on('scheduler:dismiss-hydration', () => {
+    scheduler.handleDismissHydration();
+  });
+
   // Window Controls IPC
   ipcMain.on('window:set-ignore-mouse-events', (event, ignore) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
       if (ignore) {
-        win.setIgnoreMouseEvents(true, { forward: true });
+        safeSetIgnoreMouseEvents(win, true, true);
       } else {
-        win.setIgnoreMouseEvents(false);
+        safeSetIgnoreMouseEvents(win, false, false);
       }
     }
   });
@@ -227,7 +281,7 @@ app.whenReady().then(() => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win && !win.isVisible()) {
       win.show();
-      win.setAlwaysOnTop(true, 'screen-saver');
+      win.setAlwaysOnTop(true, 'screen-saver', 1);
     }
   });
 
@@ -238,41 +292,69 @@ app.whenReady().then(() => {
     }
   });
 
-  // Custom dragging logic for borderless window (saves final location)
+  // Custom dragging — main process polls cursor at high rate to eliminate IPC drag latency
+  // Renderer only sends drag-start / drag-end. NO drag-move IPC needed.
   let dragStart: { x: number; y: number } | null = null;
+  let dragPollInterval: ReturnType<typeof setInterval> | null = null;
+
   ipcMain.on('window:drag-start', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
+      safeSetIgnoreMouseEvents(win, false, false);
       const cursor = screen.getCursorScreenPoint();
       const bounds = win.getBounds();
-      dragStart = {
-        x: cursor.x - bounds.x,
-        y: cursor.y - bounds.y
-      };
+      dragStart = { x: cursor.x - bounds.x, y: cursor.y - bounds.y };
+      const width = bounds.width;
+      const height = bounds.height;
+      let lastX = bounds.x;
+      let lastY = bounds.y;
+
+      // Poll cursor position at ~120fps in main process — zero IPC overhead per frame
+      if (dragPollInterval) clearInterval(dragPollInterval);
+      dragPollInterval = setInterval(() => {
+        if (!win || !dragStart) return;
+        const pos = screen.getCursorScreenPoint();
+        const nextX = pos.x - dragStart.x;
+        const nextY = pos.y - dragStart.y;
+
+        if (nextX !== lastX || nextY !== lastY) {
+          win.setBounds({
+            x: nextX,
+            y: nextY,
+            width,
+            height,
+          });
+          lastX = nextX;
+          lastY = nextY;
+        }
+      }, 8); // 8ms ≈ 120fps
     }
   });
 
-  ipcMain.on('window:drag-move', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win && dragStart) {
-      const cursor = screen.getCursorScreenPoint();
-      win.setBounds({
-        x: cursor.x - dragStart.x,
-        y: cursor.y - dragStart.y,
-        width: win.getBounds().width,
-        height: win.getBounds().height
-      });
-    }
-  });
+  // drag-move is now a no-op — drag is handled by the interval above
+  ipcMain.on('window:drag-move', () => { /* handled by main-process polling */ });
 
   ipcMain.on('window:drag-end', (event) => {
+    if (dragPollInterval) {
+      clearInterval(dragPollInterval);
+      dragPollInterval = null;
+    }
     dragStart = null;
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
       const [wx, wy] = win.getPosition();
-      // Persist user-defined drag coordinates
-      settingsManager.save({ windowX: wx, windowY: wy });
+      const bounds = win.getBounds();
+      const currentDisplay = screen.getDisplayMatching(bounds);
+      const { x: minX, y: minY, width: screenW, height: screenH } = currentDisplay.workArea;
+
+      // Clamp coordinates to prevent dragging off-screen
+      const clampedX = Math.max(minX, Math.min(wx, minX + screenW - bounds.width));
+      const clampedY = Math.max(minY, Math.min(wy, minY + screenH - bounds.height));
+
+      win.setPosition(clampedX, clampedY);
+      settingsManager.save({ windowX: clampedX, windowY: clampedY });
       win.webContents.send('settings:updated', settingsManager.getSettings());
+      safeSetIgnoreMouseEvents(win, true, true);
     }
   });
 
@@ -297,18 +379,14 @@ app.whenReady().then(() => {
     
     const selectedPath = filePaths[0];
     try {
-      const userDataPath = app.getPath('userData');
-      const mediaDir = path.join(userDataPath, 'media');
-      if (!fs.existsSync(mediaDir)) {
-        fs.mkdirSync(mediaDir, { recursive: true });
+      const copiedPath = await copyMediaToLibrary(selectedPath);
+      // Add to media library list
+      const settings = settingsManager.getSettings();
+      const library = settings.mediaLibrary || [];
+      if (!library.includes(copiedPath)) {
+        settingsManager.save({ mediaLibrary: [...library, copiedPath] });
       }
-      
-      const ext = path.extname(selectedPath);
-      const destFileName = `custom_buddy_${Date.now()}${ext}`;
-      const destPath = path.join(mediaDir, destFileName);
-      
-      fs.copyFileSync(selectedPath, destPath);
-      return destPath;
+      return copiedPath;
     } catch (err) {
       console.error('Failed to copy custom media file:', err);
       return null;
@@ -318,18 +396,14 @@ app.whenReady().then(() => {
   // Save dropped local path
   ipcMain.handle('media:save-path', async (_, filePath) => {
     try {
-      const userDataPath = app.getPath('userData');
-      const mediaDir = path.join(userDataPath, 'media');
-      if (!fs.existsSync(mediaDir)) {
-        fs.mkdirSync(mediaDir, { recursive: true });
+      const copiedPath = await copyMediaToLibrary(filePath);
+      // Add to media library list
+      const settings = settingsManager.getSettings();
+      const library = settings.mediaLibrary || [];
+      if (!library.includes(copiedPath)) {
+        settingsManager.save({ mediaLibrary: [...library, copiedPath] });
       }
-      
-      const ext = path.extname(filePath);
-      const destFileName = `custom_buddy_${Date.now()}${ext}`;
-      const destPath = path.join(mediaDir, destFileName);
-      
-      fs.copyFileSync(filePath, destPath);
-      return destPath;
+      return copiedPath;
     } catch (err) {
       console.error('Failed to copy dropped media file:', err);
       return null;
@@ -338,6 +412,40 @@ app.whenReady().then(() => {
 
   ipcMain.handle('media:reset', () => {
     return null;
+  });
+
+  // List all media library items
+  ipcMain.handle('media:get-library', () => {
+    const settings = settingsManager.getSettings();
+    const library: string[] = (settings.mediaLibrary || []).filter((p) => {
+      try { return fs.existsSync(p); } catch { return false; }
+    });
+    // Update in case any files were deleted externally
+    settingsManager.save({ mediaLibrary: library });
+    return library;
+  });
+
+  // Delete a specific media item from the library
+  ipcMain.handle('media:delete-library-item', (_, filePath: string) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      const settings = settingsManager.getSettings();
+      const library = (settings.mediaLibrary || []).filter((p) => p !== filePath);
+      settingsManager.save({ mediaLibrary: library });
+      // If deleted item was the current companion, reset
+      if (settings.customVideoPath === filePath) {
+        settingsManager.save({ customVideoPath: null });
+      }
+      if (mainWindow) {
+        mainWindow.webContents.send('settings:updated', settingsManager.getSettings());
+      }
+      return library;
+    } catch (err) {
+      console.error('Failed to delete media library item:', err);
+      return settingsManager.getSettings().mediaLibrary;
+    }
   });
 
   // Custom Sound Selection via standalone file chooser
@@ -414,6 +522,77 @@ app.whenReady().then(() => {
     }
   });
 
+  // Start mouse polling to check if cursor is over solid elements
+  let isSettingsVisible = true; // start with settings visible
+  let hasActiveDialogue = false;
+  let isWidgetsVisible = false;
+
+  ipcMain.on('window:settings-visibility', (_, visible) => {
+    isSettingsVisible = visible;
+  });
+
+  ipcMain.on('window:dialogue-active', (_, active) => {
+    hasActiveDialogue = active;
+  });
+
+  ipcMain.on('window:widgets-visibility', (_, visible) => {
+    isWidgetsVisible = visible;
+  });
+
+  setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
+    if (dragStart !== null) return; // don't interrupt active dragging
+
+    const cursor = screen.getCursorScreenPoint();
+    const bounds = mainWindow.getBounds();
+
+    // Check if cursor is over the window bounds first
+    const rx = cursor.x - bounds.x;
+    const ry = cursor.y - bounds.y;
+
+    let shouldIgnore = true;
+
+    if (isSettingsVisible) {
+      // Settings panel is fully active
+      shouldIgnore = false;
+    } else {
+      const stateData = scheduler.getStateMachine().getData();
+      const state = stateData.state;
+
+      // Check if cursor is within window bounds
+      if (rx >= 0 && rx <= bounds.width && ry >= 0 && ry <= bounds.height) {
+        // 1. Settings gear & close button area (top right)
+        const overHeader = rx >= bounds.width - 95 && rx <= bounds.width && ry >= 0 && ry <= 45;
+
+        // 2. Buddy container (bottom right corner)
+        // Buddy is 140x140. With paddings, checking bottom right 165x165.
+        const overBuddy = rx >= bounds.width - 165 && rx <= bounds.width && ry >= bounds.height - 165 && ry <= bounds.height;
+
+        // 3. Speech bubble (if active)
+        const hasSpeech = state === 'POPUP' || state === 'BREAK' || state === 'IDLE' || hasActiveDialogue;
+        let overSpeech = false;
+        if (hasSpeech) {
+          // Bubble is above the buddy, roughly 240px wide, 140px high
+          overSpeech = rx >= bounds.width - 265 && rx <= bounds.width && ry >= 0 && ry <= bounds.height - 135;
+        }
+
+        // 4. Widgets panel (if active and in WORKING/SNOOZE state)
+        let overWidgets = false;
+        if (isWidgetsVisible && (state === 'WORKING' || state === 'SNOOZE')) {
+          // Widgets are on the left side: from x=0 to x=195 (assuming window width is 340)
+          overWidgets = rx >= 0 && rx <= 195 && ry >= 0 && ry <= bounds.height;
+        }
+
+        if (overHeader || overBuddy || overSpeech || overWidgets) {
+          shouldIgnore = false;
+        }
+      }
+    }
+
+    // Set ignore state. Note: forward: true lets the renderer still receive mouse events
+    safeSetIgnoreMouseEvents(mainWindow, shouldIgnore, true);
+  }, 100);
+
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -429,3 +608,17 @@ app.on('will-quit', () => {
   scheduler.stop();
   trayManager.destroy();
 });
+
+// Helper: copy a media file into the app's userData/media directory
+async function copyMediaToLibrary(sourcePath: string): Promise<string> {
+  const userDataPath = app.getPath('userData');
+  const mediaDir = path.join(userDataPath, 'media');
+  if (!fs.existsSync(mediaDir)) {
+    fs.mkdirSync(mediaDir, { recursive: true });
+  }
+  const ext = path.extname(sourcePath);
+  const destFileName = `custom_buddy_${Date.now()}${ext}`;
+  const destPath = path.join(mediaDir, destFileName);
+  fs.copyFileSync(sourcePath, destPath);
+  return destPath;
+}

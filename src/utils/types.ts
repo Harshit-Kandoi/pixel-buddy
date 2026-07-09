@@ -16,6 +16,18 @@ export interface AppSettings {
   windowX: number | null;
   windowY: number | null;
   debugKeyer: boolean;
+  userName: string | null;
+  mediaLibrary: string[];
+  hydrationEnabled: boolean;
+  hydrationInterval: number;
+  hydrationGoal: number;
+  hydrationDrankToday: number;
+  hydrationLastResetDate: string | null;
+  smartMonitoringEnabled: boolean;
+  statsFocusMinutesToday: number;
+  statsBreaksCompletedToday: number;
+  statsBreaksSkippedToday: number;
+  statsBreaksSnoozedToday: number;
 }
 
 export interface StateMachineData {
@@ -26,4 +38,7 @@ export interface StateMachineData {
   skipSecondsLeft: number;
   skipsCount: number;
   isPaused: boolean;
+  hydrationSecondsLeft: number;
+  hydrationReminderActive: boolean;
 }
+

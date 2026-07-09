@@ -41,6 +41,12 @@ const api = {
     ipcRenderer.on('window:show-settings', subscription)
     return () => ipcRenderer.removeListener('window:show-settings', subscription)
   },
+  setSettingsVisible: (visible) => ipcRenderer.send('window:settings-visibility', visible),
+  setDialogueActive: (active) => ipcRenderer.send('window:dialogue-active', active),
+  setWidgetsVisible: (visible) => ipcRenderer.send('window:widgets-visibility', visible),
+  logHydration: () => ipcRenderer.send('scheduler:log-hydration'),
+  snoozeHydration: () => ipcRenderer.send('scheduler:snooze-hydration'),
+  dismissHydration: () => ipcRenderer.send('scheduler:dismiss-hydration'),
 
   // Window Drag API
   dragStart: () => ipcRenderer.send('window:drag-start'),
@@ -51,6 +57,10 @@ const api = {
   selectMedia: () => ipcRenderer.invoke('media:select'),
   saveCustomMedia: (filePath) => ipcRenderer.invoke('media:save-path', filePath),
   resetMedia: () => ipcRenderer.invoke('media:reset'),
+
+  // Media Library API (wallpaper-engine style picker)
+  getMediaLibrary: () => ipcRenderer.invoke('media:get-library'),
+  deleteMediaLibraryItem: (filePath: string) => ipcRenderer.invoke('media:delete-library-item', filePath),
 
   // Sound Selection API
   selectSound: () => ipcRenderer.invoke('sound:select'),

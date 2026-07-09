@@ -41,6 +41,8 @@ export class TrayManager {
       skipSecondsLeft: 0,
       skipsCount: 0,
       isPaused: false,
+      hydrationSecondsLeft: 0,
+      hydrationReminderActive: false,
     });
   }
 

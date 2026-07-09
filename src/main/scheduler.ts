@@ -30,6 +30,11 @@ export class Scheduler {
   public start(onTick: (data: StateMachineData) => void): void {
     this.onTickCallback = onTick;
 
+    // Initialize hydration timer
+    const settings = this.settingsManager.getSettings();
+    this.stateMachine.setHydrationSeconds(settings.hydrationInterval * 60);
+    this.stateMachine.setHydrationReminderActive(false);
+
     // Start activity tracking
     this.activityMonitor.start(
       // On long break detected (user was away for 5+ minutes and just returned)
@@ -76,9 +81,23 @@ export class Scheduler {
     const settings = this.settingsManager.getSettings();
 
     // 1. Tick the activity monitor
-    const { isActiveThisSecond } = this.activityMonitor.tick(state === APP_STATES.WORKING);
+    const { isActiveThisSecond } = this.activityMonitor.tick(
+      state === APP_STATES.WORKING,
+      settings.smartMonitoringEnabled
+    );
 
-    // 2. State-specific logic
+    // 2. Hydration countdown (ticking when working or snoozed, and enabled)
+    if (settings.hydrationEnabled && (state === APP_STATES.WORKING || state === APP_STATES.SNOOZE)) {
+      if (stateData.hydrationSecondsLeft > 0) {
+        this.stateMachine.decrementHydrationSeconds(1);
+        if (this.stateMachine.getData().hydrationSecondsLeft === 0) {
+          console.log('Hydration reminder triggered.');
+          this.stateMachine.setHydrationReminderActive(true);
+        }
+      }
+    }
+
+    // 3. State-specific logic
     switch (state) {
       case APP_STATES.WORKING: {
         // Handle skip countdown if active
@@ -93,6 +112,12 @@ export class Scheduler {
           const idleSeconds = this.activityMonitor.getContinuousIdleSeconds();
           if (idleSeconds < 300) {
             this.stateMachine.incrementWorkTime(1);
+            
+            const currentWorkSecs = this.stateMachine.getData().activeWorkSeconds;
+            if (currentWorkSecs > 0 && currentWorkSecs % 60 === 0) {
+              const currentMinutes = settings.statsFocusMinutesToday ?? 0;
+              this.settingsManager.save({ statsFocusMinutesToday: currentMinutes + 1 });
+            }
             
             const targetWorkSeconds = settings.workDuration * 60;
             if (this.stateMachine.getData().activeWorkSeconds >= targetWorkSeconds) {
@@ -121,6 +146,9 @@ export class Scheduler {
         this.stateMachine.decrementBreakSeconds(1);
         if (this.stateMachine.getData().breakSecondsLeft === 0) {
           console.log('Break completed successfully.');
+          const completedCount = settings.statsBreaksCompletedToday ?? 0;
+          this.settingsManager.save({ statsBreaksCompletedToday: completedCount + 1 });
+
           this.stateMachine.setWorkSeconds(0);
           this.stateMachine.resetSkips();
           this.stateMachine.transitionTo(APP_STATES.WORKING);
@@ -153,6 +181,9 @@ export class Scheduler {
   // User Action: Snooze
   public handleSnooze(): void {
     const settings = this.settingsManager.getSettings();
+    const snoozedCount = settings.statsBreaksSnoozedToday ?? 0;
+    this.settingsManager.save({ statsBreaksSnoozedToday: snoozedCount + 1 });
+
     this.stateMachine.setSnoozeSeconds(settings.snoozeDuration * 60);
     this.stateMachine.transitionTo(APP_STATES.SNOOZE);
   }
@@ -161,6 +192,8 @@ export class Scheduler {
   public handleSkip(): void {
     const settings = this.settingsManager.getSettings();
     this.stateMachine.incrementSkips();
+    const skippedCount = settings.statsBreaksSkippedToday ?? 0;
+    this.settingsManager.save({ statsBreaksSkippedToday: skippedCount + 1 });
     
     // Set skip cooldown timer (10 mins)
     this.stateMachine.setSkipSeconds(settings.skipDuration * 60);
@@ -172,6 +205,28 @@ export class Scheduler {
     this.stateMachine.setWorkSeconds(0);
     this.stateMachine.resetSkips();
     this.stateMachine.transitionTo(APP_STATES.WORKING);
+  }
+
+  // User Action: Log Hydration
+  public handleLogHydration(): void {
+    const settings = this.settingsManager.getSettings();
+    const newCount = (settings.hydrationDrankToday ?? 0) + 1;
+    this.settingsManager.save({ hydrationDrankToday: newCount });
+    this.stateMachine.setHydrationSeconds(settings.hydrationInterval * 60);
+    this.stateMachine.setHydrationReminderActive(false);
+  }
+
+  // User Action: Snooze Hydration
+  public handleSnoozeHydration(): void {
+    this.stateMachine.setHydrationSeconds(10 * 60); // snooze for 10 minutes
+    this.stateMachine.setHydrationReminderActive(false);
+  }
+
+  // User Action: Dismiss Hydration
+  public handleDismissHydration(): void {
+    const settings = this.settingsManager.getSettings();
+    this.stateMachine.setHydrationSeconds(settings.hydrationInterval * 60);
+    this.stateMachine.setHydrationReminderActive(false);
   }
 
   public getStateMachine(): StateMachine {

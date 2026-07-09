@@ -3,6 +3,7 @@ import { Buddy } from './components/Buddy';
 import { SpeechBubble } from './components/SpeechBubble';
 import { Timer } from './components/Timer';
 import { Settings } from './components/Settings';
+import { WidgetPanel } from './components/WidgetPanel';
 import { AppSettings, StateMachineData } from '../../utils/types';
 import { getRandomTip } from '../../utils/quotes';
 import { playChime, playWorriedBeep } from '../../utils/sounds';
@@ -11,6 +12,7 @@ function App(): React.JSX.Element {
   const [stateData, setStateData] = useState<StateMachineData | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [showSettings, setShowSettings] = useState(true);
+  const [showWidgets, setShowWidgets] = useState(false);
   const [currentTip, setCurrentTip] = useState('');
   
   // Interactive click & dismiss elements
@@ -22,6 +24,7 @@ function App(): React.JSX.Element {
   const dragThreshold = 5;
   const dragStartPos = useRef({ x: 0, y: 0 });
   const isDragging = useRef(false);
+  const isDragActive = useRef(false); // tracks if we are actively dragging (for mouse event restore)
 
   // Keep track of the last state to auto-reshow on break popups
   const lastStateRef = useRef<string>('');
@@ -43,6 +46,21 @@ function App(): React.JSX.Element {
       setIsDismissed(false);
     }
   }, [showSettings]);
+
+  // Sync settings panel visibility to main process for hit-testing
+  useEffect(() => {
+    window.api.setSettingsVisible(showSettings);
+  }, [showSettings]);
+
+  // Sync widgets visibility to main process for hit-testing
+  useEffect(() => {
+    window.api.setWidgetsVisible(showWidgets);
+  }, [showWidgets]);
+
+  // Sync interactive dialogue active state to main process for hit-testing
+  useEffect(() => {
+    window.api.setDialogueActive(clickedDialogue !== null || (stateData !== null && stateData.hydrationReminderActive));
+  }, [clickedDialogue, stateData]);
 
   // Keep refs of latest settings and stateData to prevent stale closures in event listeners
   const settingsRef = useRef<AppSettings | null>(null);
@@ -104,11 +122,15 @@ function App(): React.JSX.Element {
     };
   }, []);
 
-  // Auto-reshow if state transitions to POPUP (when work session ends)
+  // Auto-reshow if state transitions to POPUP or BREAK
   useEffect(() => {
     if (stateData) {
-      if (stateData.state === 'POPUP' && lastStateRef.current !== 'POPUP') {
-        setIsDismissed(false); // auto reshow break reminder
+      if (
+        (stateData.state === 'POPUP' && lastStateRef.current !== 'POPUP') ||
+        (stateData.state === 'BREAK' && lastStateRef.current !== 'BREAK')
+      ) {
+        setIsDismissed(false);    // auto reshow break reminder or break screen
+        setClickedDialogue(null); // clear any click dialogue so action buttons show
       }
       lastStateRef.current = stateData.state;
     }
@@ -156,7 +178,7 @@ function App(): React.JSX.Element {
   // Handle dynamic window resizing based on settings and state (quadrant-resizing friendly)
   useEffect(() => {
     if (showSettings) {
-      window.api.resize(340, 420);
+      window.api.resize(340, 430);
     } else if (stateData && settings && !isDismissed) {
       const isAlwaysVisible = settings.alwaysVisible ?? true;
 
@@ -173,8 +195,10 @@ function App(): React.JSX.Element {
         case 'WORKING':
         case 'SNOOZE':
           if (isAlwaysVisible) {
-            if (clickedDialogue) {
+            if (clickedDialogue || stateData.hydrationReminderActive) {
               window.api.resize(340, 260); // dialog bubble height
+            } else if (showWidgets) {
+              window.api.resize(340, 200); // widgets panel size
             } else {
               window.api.resize(160, 160); // compact buddy size
             }
@@ -187,16 +211,7 @@ function App(): React.JSX.Element {
           break;
       }
     }
-  }, [stateData, showSettings, settings, clickedDialogue, isDismissed]);
-
-  // Interactivity handlers to prevent click-through on UI parts
-  const handleMouseEnter = () => {
-    window.api.setIgnoreMouseEvents(false);
-  };
-
-  const handleMouseLeave = () => {
-    window.api.setIgnoreMouseEvents(true);
-  };
+  }, [stateData, showSettings, settings, clickedDialogue, isDismissed, showWidgets]);
 
   const handleSaveSettings = (newSettings: Partial<AppSettings>) => {
     window.api.saveSettings(newSettings);
@@ -218,22 +233,25 @@ function App(): React.JSX.Element {
     if (e.button !== 0) return; // Only left-click drags
     dragStartPos.current = { x: e.screenX, y: e.screenY };
     isDragging.current = false;
-
-    window.api.dragStart();
+    isDragActive.current = true;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const dx = moveEvent.screenX - dragStartPos.current.x;
       const dy = moveEvent.screenY - dragStartPos.current.y;
-      
       if (Math.hypot(dx, dy) > dragThreshold) {
-        isDragging.current = true;
+        if (!isDragging.current) {
+          isDragging.current = true;
+          window.api.dragStart(); // main process takes over polling and sets ignore mouse events to false
+        }
       }
-      
-      window.api.dragMove();
+      // NOTE: NO dragMove() IPC call here — main process polls cursor directly
     };
 
     const handleMouseUp = () => {
-      window.api.dragEnd();
+      isDragActive.current = false;
+      if (isDragging.current) {
+        window.api.dragEnd(); // main process stops polling, saves position, re-enables click-through
+      }
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
 
@@ -247,29 +265,38 @@ function App(): React.JSX.Element {
   };
 
   const handleBuddyClick = () => {
-    const soundEnabled = settings?.sound ?? true;
+    // During POPUP state: don't replace the break notification — just play a small chime
+    // and show a relevant nudge, keeping action buttons visible
+    if (stateDataRef.current?.state === 'POPUP') {
+      const soundEnabled = settingsRef.current?.sound ?? true;
+      playChime(soundEnabled);
+      // Only animate, don't override the speech bubble content (action buttons must stay)
+      setClickAnimClass('buddy-jump');
+      setTimeout(() => setClickAnimClass(''), 600);
+      return;
+    }
+
+    const soundEnabled = settingsRef.current?.sound ?? true;
     playChime(soundEnabled);
 
     const INTERACTIVE_QUOTES = [
-      "You're doing great! Keep going!",
-      "Make sure to sit straight. No shrimp posture!",
-      "A bug in the code? We'll squash it together!",
+      "You're doing great! Keep going! 🚀",
+      "Make sure to sit straight. No shrimp posture! 🦐",
+      "A bug in the code? We'll squash it together! 🐛",
       "Did you know? Code written after midnight has +50% bugs.",
       "Remember to breathe! *Inhale*... *Exhale*...",
-      "Is that TypeScript compiling? Beautiful.",
-      "How's the coffee? Don't forget water too!",
-      "You're writing some fine code today!",
+      "Is that TypeScript compiling? Beautiful. ✨",
+      "How's the coffee? Don't forget water too! 💧",
+      "You're writing some fine code today! 💻",
       "Let's make this app the best it can be!",
-      "Need a quick stretch? I'm always ready for a break!"
+      "Need a quick stretch? I'm always ready for a break! 🤸",
     ];
 
     const randomQuote = INTERACTIVE_QUOTES[Math.floor(Math.random() * INTERACTIVE_QUOTES.length)];
     setClickedDialogue(randomQuote);
 
-    // Play a random click animation
-    const anim = Math.random() > 0.5 ? 'buddy-jump' : 'buddy-spin';
-    setClickAnimClass(anim);
-
+    // Only use buddy-jump on click — never buddy-spin (which rotates GIFs)
+    setClickAnimClass('buddy-jump');
     setTimeout(() => {
       setClickAnimClass('');
     }, 600);
@@ -281,15 +308,6 @@ function App(): React.JSX.Element {
       handleSaveSettings({ customVideoPath: copiedPath });
     }
   };
-
-  // Sync mouse ignore state: full interactivity in Settings/expanded dialogs, click-through otherwise
-  useEffect(() => {
-    if (showSettings) {
-      window.api.setIgnoreMouseEvents(false);
-    } else {
-      window.api.setIgnoreMouseEvents(true);
-    }
-  }, [showSettings]);
 
   if (!stateData || !settings) {
     return <div style={{ display: 'none' }} />;
@@ -304,6 +322,7 @@ function App(): React.JSX.Element {
     stateData.state === 'POPUP' || 
     stateData.state === 'BREAK' || 
     stateData.state === 'IDLE' || 
+    stateData.hydrationReminderActive ||
     clickedDialogue !== null;
 
   return (
@@ -312,7 +331,8 @@ function App(): React.JSX.Element {
         <Settings 
           settings={settings} 
           onSave={handleSaveSettings} 
-          onClose={() => setShowSettings(false)} 
+          onClose={() => setShowSettings(false)}
+          onHeaderMouseDown={handleMouseDown}
         />
       ) : (
         <>
@@ -322,8 +342,6 @@ function App(): React.JSX.Element {
             <div 
               className="display-close non-draggable"
               onClick={() => setIsDismissed(true)}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
               title="Close Display"
             >
               ✕
@@ -332,12 +350,10 @@ function App(): React.JSX.Element {
 
           {/* Settings Trigger Icon (hidden in compact work mode to prevent overlap) */}
           {(stateData.state !== 'BREAK' && 
-            (stateData.state !== 'WORKING' && stateData.state !== 'SNOOZE' || clickedDialogue)) && (
+            (stateData.state !== 'WORKING' && stateData.state !== 'SNOOZE' || clickedDialogue || stateData.hydrationReminderActive)) && (
             <div 
               className="settings-trigger non-draggable"
               onClick={() => setShowSettings(true)}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
               title="Open Settings"
             >
               ⚙
@@ -351,9 +367,13 @@ function App(): React.JSX.Element {
               skipsCount={stateData.skipsCount} 
               workDuration={settings.workDuration}
               tip={currentTip}
-              customDialogue={clickedDialogue}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
+              customDialogue={
+                clickedDialogue || 
+                (stateData.hydrationReminderActive 
+                  ? `Hey ${settings.userName || 'there'}!\nTime for a water break! 💧\nStay hydrated to keep focused.` 
+                  : null)
+              }
+              userName={settings.userName}
               onMouseDown={handleMouseDown}
             >
               {/* Conditional action buttons inside bubble (only when break reminder popup is active) */}
@@ -380,6 +400,30 @@ function App(): React.JSX.Element {
                 </div>
               )}
 
+              {/* Hydration action buttons inside bubble (only when water reminder is active) */}
+              {stateData.hydrationReminderActive && !clickedDialogue && (
+                <div className="action-buttons non-draggable">
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={() => window.api.logHydration()}
+                  >
+                    Drank Water 💧
+                  </button>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => window.api.snoozeHydration()}
+                  >
+                    Snooze 10m
+                  </button>
+                  <button 
+                    className="btn btn-danger" 
+                    onClick={() => window.api.dismissHydration()}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
               {/* Break countdown timer */}
               {stateData.state === 'BREAK' && !clickedDialogue && (
                 <Timer 
@@ -390,18 +434,38 @@ function App(): React.JSX.Element {
             </SpeechBubble>
           )}
 
-          {/* Floating cute companion */}
-          <Buddy 
-            state={stateData.state} 
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            customVideoPath={settings.customVideoPath}
-            keyingMode={settings.keyingMode}
-            debugKeyer={settings.debugKeyer}
-            clickAnimClass={clickAnimClass}
-            onMouseDown={handleMouseDown}
-            onFileDrop={handleFileDrop}
-          />
+          {/* Row container for widgets and companion buddy */}
+          <div className="buddy-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', position: 'relative' }}>
+            {/* Widgets Toggle Button */}
+            {(stateData.state === 'WORKING' || stateData.state === 'SNOOZE') && !clickedDialogue && !stateData.hydrationReminderActive && (
+              <div 
+                className={`widgets-toggle non-draggable ${showWidgets ? 'active' : ''}`}
+                onClick={() => setShowWidgets(!showWidgets)}
+                title={showWidgets ? "Hide Widgets" : "Show Widgets"}
+              >
+                {showWidgets ? '▶' : '◀'}
+              </div>
+            )}
+
+            {showWidgets && (stateData.state === 'WORKING' || stateData.state === 'SNOOZE') && !clickedDialogue && !stateData.hydrationReminderActive && (
+              <WidgetPanel 
+                stateData={stateData}
+                settings={settings}
+                onSaveSettings={handleSaveSettings}
+              />
+            )}
+
+            {/* Floating cute companion */}
+            <Buddy 
+              state={stateData.state} 
+              customVideoPath={settings.customVideoPath}
+              keyingMode={settings.keyingMode}
+              debugKeyer={settings.debugKeyer}
+              clickAnimClass={clickAnimClass}
+              onMouseDown={handleMouseDown}
+              onFileDrop={handleFileDrop}
+            />
+          </div>
         </>
       )}
     </div>

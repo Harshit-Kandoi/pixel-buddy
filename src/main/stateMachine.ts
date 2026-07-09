@@ -12,6 +12,8 @@ export class StateMachine {
   private skipSecondsLeft = 0;
   private skipsCount = 0;
   private isPaused = false;
+  private hydrationSecondsLeft = 0;
+  private hydrationReminderActive = false;
 
   private onStateChangeCallback: ((data: StateMachineData) => void) | null = null;
 
@@ -28,7 +30,24 @@ export class StateMachine {
       skipSecondsLeft: this.skipSecondsLeft,
       skipsCount: this.skipsCount,
       isPaused: this.isPaused,
+      hydrationSecondsLeft: this.hydrationSecondsLeft,
+      hydrationReminderActive: this.hydrationReminderActive,
     };
+  }
+
+  public setHydrationSeconds(seconds: number): void {
+    this.hydrationSecondsLeft = seconds;
+    this.emitChange();
+  }
+
+  public decrementHydrationSeconds(seconds = 1): void {
+    this.hydrationSecondsLeft = Math.max(0, this.hydrationSecondsLeft - seconds);
+    this.emitChange();
+  }
+
+  public setHydrationReminderActive(active: boolean): void {
+    this.hydrationReminderActive = active;
+    this.emitChange();
   }
 
   private emitChange(): void {

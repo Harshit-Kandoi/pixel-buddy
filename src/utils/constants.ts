@@ -24,6 +24,18 @@ export const DEFAULT_SETTINGS = {
   windowX: null as number | null,
   windowY: null as number | null,
   debugKeyer: false,
+  userName: null as string | null,
+  mediaLibrary: [] as string[],
+  hydrationEnabled: true,
+  hydrationInterval: 60, // in minutes
+  hydrationGoal: 8, // in glasses
+  hydrationDrankToday: 0,
+  hydrationLastResetDate: null as string | null,
+  smartMonitoringEnabled: true,
+  statsFocusMinutesToday: 0,
+  statsBreaksCompletedToday: 0,
+  statsBreaksSkippedToday: 0,
+  statsBreaksSnoozedToday: 0,
 };
 
 export const ACTIVITY_WEIGHTS = {
