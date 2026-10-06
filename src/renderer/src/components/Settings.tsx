@@ -58,21 +58,14 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
   }, [refreshLibrary]);
 
   useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop += e.deltaY;
-      }
-    };
-    const el = scrollRef.current;
-    if (el) {
-      el.addEventListener('wheel', handleWheel, { passive: true });
-    }
-    return () => {
-      if (el) {
-        el.removeEventListener('wheel', handleWheel);
-      }
-    };
-  }, []);
+    setWorkDuration(settings.workDuration);
+    setBreakDuration(settings.breakDuration);
+    setSnoozeDuration(settings.snoozeDuration);
+    setCustomVideoPath(settings.customVideoPath);
+    setMediaLibrary(settings.mediaLibrary);
+  }, [settings]);
+
+  useEffect(() => () => { soundPreviewRef.current?.pause(); }, []);
 
   useEffect(() => {
     // Check permission on load
@@ -174,7 +167,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file) {
-      const filePath = (file as any).path;
+      const filePath = window.api.getPathForFile(file);
       if (filePath) {
         const copiedPath = await window.api.saveCustomMedia(filePath);
         if (copiedPath) {
@@ -202,7 +195,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          <span className="settings-title">Buddy Settings</span>
+          <span className="settings-title">Pixel Buddy</span>
         </div>
         <button className="settings-close non-draggable" onClick={onClose} aria-label="Close settings" onMouseDown={(e) => e.stopPropagation()}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -212,6 +205,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
         </button>
       </div>
 
+      <div className="settings-welcome"><span className="settings-eyebrow">YOUR LITTLE WORKDAY COMPANION</span><p>A good day starts with a little balance.</p></div>
       {/* Tab Selectors Bar */}
       <div className="settings-tab-bar">
         <button 
@@ -243,7 +237,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   className="setting-text-input"
                   placeholder="Hey there! (leave blank for default)"
                   maxLength={24}
-                  value={userName}
+                  aria-label="Your name" value={userName}
                   onChange={(e) => {
                     setUserName(e.target.value);
                     handleSave('userName', e.target.value || null);
@@ -252,6 +246,9 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
               </div>
             </div>
 
+            <div className="setting-row"><span className="setting-label">Find your rhythm</span><div className="routine-presets">
+              {[{ label: 'Pomodoro', work: 25, rest: 5 }, { label: 'Balanced', work: 55, rest: 5 }, { label: 'Deep focus', work: 90, rest: 10 }].map((preset) => <button key={preset.label} className={`routine-preset ${workDuration === preset.work && breakDuration === preset.rest ? 'selected' : ''}`} onClick={() => onSave({ workDuration: preset.work, breakDuration: preset.rest })}><strong>{preset.label}</strong><span>{preset.work} / {preset.rest} min</span></button>)}
+            </div><p className="setting-help">Changes save automatically. Make it your own below.</p></div>
             {/* Timers Section */}
             <div className="setting-row">
               <div className="setting-header-row">
@@ -264,7 +261,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   min="5"
                   max="120"
                   step="5"
-                  value={workDuration}
+                  aria-label="Work duration" value={workDuration}
                   className="setting-slider"
                   onChange={(e) => {
                     const val = parseInt(e.target.value);
@@ -285,7 +282,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   type="range"
                   min="1"
                   max="30"
-                  value={breakDuration}
+                  aria-label="Break duration" value={breakDuration}
                   className="setting-slider break-slider"
                   onChange={(e) => {
                     const val = parseInt(e.target.value);
@@ -307,7 +304,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   min="5"
                   max="60"
                   step="5"
-                  value={snoozeDuration}
+                  aria-label="Snooze duration" value={snoozeDuration}
                   className="setting-slider snooze-slider"
                   onChange={(e) => {
                     const val = parseInt(e.target.value);
@@ -325,7 +322,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 <label className="switch non-draggable">
                   <input
                     type="checkbox"
-                    checked={hydrationEnabled}
+                    aria-label="Water reminders" checked={hydrationEnabled}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setHydrationEnabled(val);
@@ -350,7 +347,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                       min="10"
                       max="180"
                       step="5"
-                      value={hydrationInterval}
+                      aria-label="Water reminder interval" value={hydrationInterval}
                       className="setting-slider break-slider"
                       style={{ accentColor: '#3b82f6' }}
                       onChange={(e) => {
@@ -373,7 +370,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                       min="1"
                       max="20"
                       step="1"
-                      value={hydrationGoal}
+                      aria-label="Daily water goal" value={hydrationGoal}
                       className="setting-slider break-slider"
                       style={{ accentColor: '#3b82f6' }}
                       onChange={(e) => {
@@ -529,7 +526,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   type="range"
                   min="0"
                   max="360"
-                  value={themeHue}
+                  aria-label="Theme color" value={themeHue}
                   className="setting-slider"
                   onChange={(e) => {
                     const val = parseInt(e.target.value);
@@ -550,7 +547,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 <label className="switch non-draggable">
                   <input
                     type="checkbox"
-                    checked={alwaysVisible}
+                    aria-label="Keep buddy visible" checked={alwaysVisible}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setAlwaysVisible(val);
@@ -569,7 +566,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 <label className="switch non-draggable">
                   <input
                     type="checkbox"
-                    checked={debugKeyer}
+                    aria-label="Preview background removal" checked={debugKeyer}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setDebugKeyer(val);
@@ -588,7 +585,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 <label className="switch non-draggable">
                   <input
                     type="checkbox"
-                    checked={sound}
+                    aria-label="Sound alerts" checked={sound}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setSound(val);
@@ -607,7 +604,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 <label className="switch non-draggable">
                   <input
                     type="checkbox"
-                    checked={startOnBoot}
+                    aria-label="Start on boot" checked={startOnBoot}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setStartOnBoot(val);
@@ -633,7 +630,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   <label className="switch non-draggable" style={{ transform: 'scale(0.8)' }}>
                     <input
                       type="checkbox"
-                      checked={smartMonitoringEnabled}
+                      aria-label="Smart activity monitoring" checked={smartMonitoringEnabled}
                       onChange={(e) => {
                         const val = e.target.checked;
                         setSmartMonitoringEnabled(val);

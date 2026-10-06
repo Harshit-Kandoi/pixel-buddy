@@ -1,6 +1,6 @@
 import { StateMachine, StateMachineData } from './stateMachine';
-import { ActivityMonitor } from './activity';
-import { SettingsManager } from './settings';
+import type { ActivityMonitor } from './activity';
+import type { SettingsManager } from './settings';
 import { APP_STATES } from '../utils/constants';
 
 export class Scheduler {
@@ -9,6 +9,7 @@ export class Scheduler {
   private activityMonitor: ActivityMonitor;
   private settingsManager: SettingsManager;
   private onTickCallback: ((data: StateMachineData) => void) | null = null;
+  private breakGraceTicks = 0;
 
   constructor(
     settingsManager: SettingsManager,
@@ -20,29 +21,25 @@ export class Scheduler {
     
     this.stateMachine = new StateMachine((data) => {
       // Forward state changes to the callback (which updates the UI)
-      if (this.onTickCallback) {
-        this.onTickCallback(data);
-      }
       onStateChange(data);
     });
   }
 
   public start(onTick: (data: StateMachineData) => void): void {
-    this.onTickCallback = onTick;
+    if (this.timer) return;
 
     // Initialize hydration timer
     const settings = this.settingsManager.getSettings();
     this.stateMachine.setHydrationSeconds(settings.hydrationInterval * 60);
     this.stateMachine.setHydrationReminderActive(false);
+    this.onTickCallback = onTick;
 
     // Start activity tracking
     this.activityMonitor.start(
       // On long break detected (user was away for 5+ minutes and just returned)
       () => {
         console.log('Smart Reset: User completed an offline break. Resetting work timer.');
-        this.stateMachine.setWorkSeconds(0);
-        this.stateMachine.resetSkips();
-        this.stateMachine.transitionTo(APP_STATES.WORKING);
+        this.handleReset();
       },
       // On went idle (no activity for 5 minutes)
       () => {
@@ -59,7 +56,10 @@ export class Scheduler {
     );
 
     // Run the scheduler loop every second
-    this.timer = setInterval(() => this.tick(), 1000);
+    this.timer = setInterval(() => {
+      this.tick();
+      this.onTickCallback?.(this.stateMachine.getData());
+    }, 1000);
     
     // Initial emission
     this.onTickCallback(this.stateMachine.getData());
@@ -74,17 +74,18 @@ export class Scheduler {
   }
 
   private tick(): void {
-    const stateData = this.stateMachine.getData();
-    if (stateData.isPaused) return;
-
-    const state = stateData.state;
+    let stateData = this.stateMachine.getData();
     const settings = this.settingsManager.getSettings();
+    if (stateData.isPaused) return;
 
     // 1. Tick the activity monitor
     const { isActiveThisSecond } = this.activityMonitor.tick(
-      state === APP_STATES.WORKING,
+      stateData.state === APP_STATES.WORKING || stateData.state === APP_STATES.IDLE,
       settings.smartMonitoringEnabled
     );
+    // Activity callbacks can change the state during this tick.
+    stateData = this.stateMachine.getData();
+    const state = this.stateMachine.getState();
 
     // 2. Hydration countdown (ticking when working or snoozed, and enabled)
     if (settings.hydrationEnabled && (state === APP_STATES.WORKING || state === APP_STATES.SNOOZE)) {
@@ -133,8 +134,10 @@ export class Scheduler {
         break;
 
       case APP_STATES.BREAK: {
+        const inGracePeriod = this.breakGraceTicks > 0;
+        if (inGracePeriod) this.breakGraceTicks--;
         // Smart Reset: If user returns to PC early (types or clicks mouse)
-        if (isActiveThisSecond) {
+        if (!inGracePeriod && settings.smartMonitoringEnabled && isActiveThisSecond) {
           console.log('Smart Reset: Keyboard/Mouse activity detected during break. Restarting work timer.');
           this.stateMachine.setWorkSeconds(0);
           this.stateMachine.resetSkips();
@@ -174,6 +177,12 @@ export class Scheduler {
   // User Action: Take Break
   public handleTakeBreak(): void {
     const settings = this.settingsManager.getSettings();
+    // Do not interpret the click that starts a break as returning to work.
+    this.breakGraceTicks = 2;
+    this.activityMonitor.resetMinuteScore();
+    this.stateMachine.setSkipSeconds(0);
+    this.stateMachine.setSnoozeSeconds(0);
+    this.stateMachine.togglePause(false);
     this.stateMachine.setBreakSeconds(settings.breakDuration * 60);
     this.stateMachine.transitionTo(APP_STATES.BREAK);
   }
@@ -203,8 +212,22 @@ export class Scheduler {
   // User Action: Reset/Force Start Work
   public handleReset(): void {
     this.stateMachine.setWorkSeconds(0);
+    this.stateMachine.setSkipSeconds(0);
+    this.stateMachine.setSnoozeSeconds(0);
+    this.stateMachine.setBreakSeconds(0);
     this.stateMachine.resetSkips();
+    this.stateMachine.togglePause(false);
     this.stateMachine.transitionTo(APP_STATES.WORKING);
+  }
+
+  public handleSettingsChanged(previous: ReturnType<SettingsManager['getSettings']>): void {
+    const settings = this.settingsManager.getSettings();
+    if (settings.hydrationEnabled !== previous.hydrationEnabled || settings.hydrationInterval !== previous.hydrationInterval) {
+      this.handleDismissHydration();
+    }
+    if (!settings.smartMonitoringEnabled && this.stateMachine.getState() === APP_STATES.IDLE) {
+      this.stateMachine.transitionTo(APP_STATES.WORKING);
+    }
   }
 
   // User Action: Log Hydration

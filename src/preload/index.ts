@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
@@ -18,6 +18,7 @@ const api = {
   snooze: () => ipcRenderer.send('scheduler:snooze'),
   skip: () => ipcRenderer.send('scheduler:skip'),
   reset: () => ipcRenderer.send('scheduler:reset'),
+  togglePause: () => ipcRenderer.send('scheduler:toggle-pause'),
   onUpdate: (callback) => {
     const subscription = (_, data) => callback(data)
     ipcRenderer.on('scheduler:update', subscription)
@@ -55,6 +56,7 @@ const api = {
 
   // Media Selection API
   selectMedia: () => ipcRenderer.invoke('media:select'),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   saveCustomMedia: (filePath) => ipcRenderer.invoke('media:save-path', filePath),
   resetMedia: () => ipcRenderer.invoke('media:reset'),
 

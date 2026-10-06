@@ -11,6 +11,7 @@ import { playChime, playWorriedBeep } from '../../utils/sounds';
 function App(): React.JSX.Element {
   const [stateData, setStateData] = useState<StateMachineData | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const showHydrationReminder = !!stateData?.hydrationReminderActive && stateData.state !== 'POPUP' && stateData.state !== 'BREAK';
   const [showSettings, setShowSettings] = useState(true);
   const [showWidgets, setShowWidgets] = useState(false);
   const [currentTip, setCurrentTip] = useState('');
@@ -40,6 +41,10 @@ function App(): React.JSX.Element {
     return undefined;
   }, [clickedDialogue]);
 
+  useEffect(() => {
+    if (showHydrationReminder) setIsDismissed(false);
+  }, [showHydrationReminder]);
+
   // Auto-reset dismissal if settings are opened
   useEffect(() => {
     if (showSettings) {
@@ -59,7 +64,7 @@ function App(): React.JSX.Element {
 
   // Sync interactive dialogue active state to main process for hit-testing
   useEffect(() => {
-    window.api.setDialogueActive(clickedDialogue !== null || (stateData !== null && stateData.hydrationReminderActive));
+    window.api.setDialogueActive(clickedDialogue !== null || (stateData !== null && showHydrationReminder));
   }, [clickedDialogue, stateData]);
 
   // Keep refs of latest settings and stateData to prevent stale closures in event listeners
@@ -99,6 +104,7 @@ function App(): React.JSX.Element {
           }
         }
       }
+      stateDataRef.current = data;
       setStateData(data);
     });
 
@@ -160,6 +166,8 @@ function App(): React.JSX.Element {
   const isWindowVisible = 
     !isDismissed && (
       showSettings || 
+      showHydrationReminder ||
+      clickedDialogue !== null ||
       stateData?.state === 'POPUP' || 
       stateData?.state === 'BREAK' || 
       stateData?.state === 'IDLE' ||
@@ -178,7 +186,7 @@ function App(): React.JSX.Element {
   // Handle dynamic window resizing based on settings and state (quadrant-resizing friendly)
   useEffect(() => {
     if (showSettings) {
-      window.api.resize(340, 430);
+      window.api.resize(400, 560);
     } else if (stateData && settings && !isDismissed) {
       const isAlwaysVisible = settings.alwaysVisible ?? true;
 
@@ -194,13 +202,13 @@ function App(): React.JSX.Element {
           break;
         case 'WORKING':
         case 'SNOOZE':
-          if (isAlwaysVisible) {
-            if (clickedDialogue || stateData.hydrationReminderActive) {
-              window.api.resize(340, 260); // dialog bubble height
+          if (isAlwaysVisible || clickedDialogue || showHydrationReminder) {
+            if (clickedDialogue || showHydrationReminder) {
+              window.api.resize(340, 340); // room for reminder text, actions, and the buddy
             } else if (showWidgets) {
-              window.api.resize(340, 200); // widgets panel size
+              window.api.resize(400, 200); // widgets panel size
             } else {
-              window.api.resize(160, 160); // compact buddy size
+              window.api.resize(210, 160); // compact buddy size
             }
           } else {
             window.api.resize(1, 1);
@@ -211,7 +219,7 @@ function App(): React.JSX.Element {
           break;
       }
     }
-  }, [stateData, showSettings, settings, clickedDialogue, isDismissed, showWidgets]);
+  }, [stateData, showSettings, settings, clickedDialogue, isDismissed, showWidgets, showHydrationReminder]);
 
   const handleSaveSettings = (newSettings: Partial<AppSettings>) => {
     window.api.saveSettings(newSettings);
@@ -283,7 +291,7 @@ function App(): React.JSX.Element {
       "You're doing great! Keep going! 🚀",
       "Make sure to sit straight. No shrimp posture! 🦐",
       "A bug in the code? We'll squash it together! 🐛",
-      "Did you know? Code written after midnight has +50% bugs.",
+      "A little rest can bring a fresh perspective.",
       "Remember to breathe! *Inhale*... *Exhale*...",
       "Is that TypeScript compiling? Beautiful. ✨",
       "How's the coffee? Don't forget water too! 💧",
@@ -322,7 +330,7 @@ function App(): React.JSX.Element {
     stateData.state === 'POPUP' || 
     stateData.state === 'BREAK' || 
     stateData.state === 'IDLE' || 
-    stateData.hydrationReminderActive ||
+    showHydrationReminder ||
     clickedDialogue !== null;
 
   return (
@@ -339,25 +347,25 @@ function App(): React.JSX.Element {
           {/* Close display button (hides window, runs in tray) */}
           {(stateData.state !== 'BREAK' && 
             (stateData.state !== 'WORKING' && stateData.state !== 'SNOOZE' || clickedDialogue)) && (
-            <div 
+            <button type="button" aria-label="Hide buddy"
               className="display-close non-draggable"
               onClick={() => setIsDismissed(true)}
               title="Close Display"
             >
               ✕
-            </div>
+            </button>
           )}
 
           {/* Settings Trigger Icon (hidden in compact work mode to prevent overlap) */}
           {(stateData.state !== 'BREAK' && 
-            (stateData.state !== 'WORKING' && stateData.state !== 'SNOOZE' || clickedDialogue || stateData.hydrationReminderActive)) && (
-            <div 
+            (stateData.state !== 'WORKING' && stateData.state !== 'SNOOZE' || clickedDialogue || showHydrationReminder)) && (
+            <button type="button" aria-label="Open settings"
               className="settings-trigger non-draggable"
               onClick={() => setShowSettings(true)}
               title="Open Settings"
             >
               ⚙
-            </div>
+            </button>
           )}
 
           {/* Speech dialogue bubble */}
@@ -369,7 +377,7 @@ function App(): React.JSX.Element {
               tip={currentTip}
               customDialogue={
                 clickedDialogue || 
-                (stateData.hydrationReminderActive 
+                (showHydrationReminder
                   ? `Hey ${settings.userName || 'there'}!\nTime for a water break! 💧\nStay hydrated to keep focused.` 
                   : null)
               }
@@ -401,7 +409,7 @@ function App(): React.JSX.Element {
               )}
 
               {/* Hydration action buttons inside bubble (only when water reminder is active) */}
-              {stateData.hydrationReminderActive && !clickedDialogue && (
+              {showHydrationReminder && !clickedDialogue && (
                 <div className="action-buttons non-draggable">
                   <button 
                     className="btn btn-primary" 
@@ -428,7 +436,7 @@ function App(): React.JSX.Element {
               {stateData.state === 'BREAK' && !clickedDialogue && (
                 <Timer 
                   secondsLeft={stateData.breakSecondsLeft} 
-                  subtext="early activity resets timer" 
+                  subtext={settings.smartMonitoringEnabled ? 'Activity resumes your focus timer' : 'Take a moment just for you'}
                 />
               )}
             </SpeechBubble>
@@ -437,17 +445,17 @@ function App(): React.JSX.Element {
           {/* Row container for widgets and companion buddy */}
           <div className="buddy-row" style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', position: 'relative' }}>
             {/* Widgets Toggle Button */}
-            {(stateData.state === 'WORKING' || stateData.state === 'SNOOZE') && !clickedDialogue && !stateData.hydrationReminderActive && (
-              <div 
+            {(stateData.state === 'WORKING' || stateData.state === 'SNOOZE') && !clickedDialogue && !showHydrationReminder && (
+              <button type="button" aria-label="Toggle timer and water widgets"
                 className={`widgets-toggle non-draggable ${showWidgets ? 'active' : ''}`}
                 onClick={() => setShowWidgets(!showWidgets)}
                 title={showWidgets ? "Hide Widgets" : "Show Widgets"}
               >
                 {showWidgets ? '▶' : '◀'}
-              </div>
+              </button>
             )}
 
-            {showWidgets && (stateData.state === 'WORKING' || stateData.state === 'SNOOZE') && !clickedDialogue && !stateData.hydrationReminderActive && (
+            {showWidgets && (stateData.state === 'WORKING' || stateData.state === 'SNOOZE') && !clickedDialogue && !showHydrationReminder && (
               <WidgetPanel 
                 stateData={stateData}
                 settings={settings}

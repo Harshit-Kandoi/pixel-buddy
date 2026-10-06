@@ -13,6 +13,10 @@ describe('Scheduler', () => {
     vi.useFakeTimers();
 
     mockSettingsManager = {
+      save: vi.fn().mockImplementation((patch) => {
+        const current = mockSettingsManager.getSettings();
+        mockSettingsManager.getSettings.mockReturnValue({ ...current, ...patch });
+      }),
       getSettings: vi.fn().mockReturnValue({
         ...DEFAULT_SETTINGS,
         workDuration: 1, // 1 minute = 60s
@@ -31,6 +35,7 @@ describe('Scheduler', () => {
       stop: vi.fn(),
       tick: vi.fn().mockReturnValue({ isActiveThisSecond: false }),
       getContinuousIdleSeconds: vi.fn().mockReturnValue(0),
+      resetMinuteScore: vi.fn(),
     };
   });
 
@@ -104,6 +109,8 @@ describe('Scheduler', () => {
     // Simulate mouse/key activity on next tick
     mockActivityMonitor.tick.mockReturnValue({ isActiveThisSecond: true });
     vi.advanceTimersByTime(1000);
+    expect(sm.getState()).toBe(APP_STATES.BREAK);
+    vi.advanceTimersByTime(2000);
 
     expect(sm.getState()).toBe(APP_STATES.WORKING);
     expect(sm.getData().activeWorkSeconds).toBe(0);
@@ -163,4 +170,63 @@ describe('Scheduler', () => {
 
     scheduler.stop();
   });
+  test('reset clears all cooldowns and resumes a paused timer', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    const sm = scheduler.getStateMachine();
+    sm.setSkipSeconds(600);
+    sm.setSnoozeSeconds(300);
+    sm.setBreakSeconds(60);
+    sm.setWorkSeconds(40);
+    sm.togglePause(true);
+    scheduler.handleReset();
+    expect(sm.getData()).toMatchObject({ state: 'WORKING', skipSecondsLeft: 0, snoozeSecondsLeft: 0, breakSecondsLeft: 0, activeWorkSeconds: 0, isPaused: false });
+  });
+
+  test('regular timer mode allows a full break even with activity', () => {
+    mockSettingsManager.save({ smartMonitoringEnabled: false });
+    mockActivityMonitor.tick.mockReturnValue({ isActiveThisSecond: true });
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    scheduler.handleTakeBreak();
+    vi.advanceTimersByTime(30000);
+    expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'BREAK', breakSecondsLeft: 30 });
+    vi.advanceTimersByTime(30000);
+    expect(mockSettingsManager.getSettings().statsBreaksCompletedToday).toBe(1);
+    scheduler.stop();
+  });
+
+  test('counts a long absence in IDLE as an offline break', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    scheduler.getStateMachine().setWorkSeconds(59);
+    scheduler.getStateMachine().setSkipSeconds(10);
+    onIdleDetectedCb();
+    mockActivityMonitor.tick.mockImplementation((canReset) => {
+      if (canReset) onBreakDetectedCb();
+      onActiveResumedCb();
+      return { isActiveThisSecond: true };
+    });
+    vi.advanceTimersByTime(1000);
+    expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'WORKING', activeWorkSeconds: 1 });
+    scheduler.stop();
+  });
+
+  test('changing hydration interval applies immediately and clears its reminder', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    const previous = mockSettingsManager.getSettings();
+    scheduler.getStateMachine().setHydrationReminderActive(true);
+    mockSettingsManager.save({ hydrationInterval: 20 });
+    scheduler.handleSettingsChanged(previous);
+    expect(scheduler.getStateMachine().getData()).toMatchObject({ hydrationSecondsLeft: 1200, hydrationReminderActive: false });
+  });
+
+  test('starting twice does not create duplicate timers', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    scheduler.start(vi.fn());
+    vi.advanceTimersByTime(3000);
+    expect(mockActivityMonitor.tick).toHaveBeenCalledTimes(3);
+    scheduler.stop();
+  });
+
 });

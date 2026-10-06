@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import buddyVideo from '../assets/buddy.mp4';
+import buddyMascot from '../assets/buddy.svg';
 
 interface BuddyProps {
   state: string;
@@ -157,8 +157,8 @@ export const Buddy: React.FC<BuddyProps> = ({
   const bgTickRef = useRef(0);
   const rafRef = useRef<number>(0);
 
-  const mediaSrc = customVideoPath ? `buddy-media://${customVideoPath}` : buddyVideo;
-  const isImage = customVideoPath ? /\.(gif|png|webp|apng)$/i.test(customVideoPath) : false;
+  const mediaSrc = customVideoPath ? `buddy-media://${customVideoPath}` : buddyMascot;
+  const isImage = !customVideoPath || /\.(gif|png|webp|apng)$/i.test(customVideoPath);
 
   // Animation class goes on the wrapper div, NOT the media element
   // This prevents GIFs from rotating/distorting on click
@@ -331,7 +331,7 @@ export const Buddy: React.FC<BuddyProps> = ({
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file && onFileDrop) {
-      const fp = (file as any).path;
+      const fp = window.api.getPathForFile(file);
       if (fp) onFileDrop(fp);
     }
   };

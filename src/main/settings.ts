@@ -12,8 +12,10 @@ export type { AppSettings };
 export class SettingsManager {
   private filePath: string;
   private settings: AppSettings;
+  private onChange?: (settings: AppSettings) => void;
 
-  constructor() {
+  constructor(onChange?: (settings: AppSettings) => void) {
+    this.onChange = onChange;
     // If running in main process before app is ready, getPath might need app to be initialized
     const userDataPath = app.getPath('userData');
     this.filePath = path.join(userDataPath, SETTINGS_FILE_NAME);
@@ -56,7 +58,8 @@ export class SettingsManager {
   }
 
   public getSettings(): AppSettings {
-    return this.settings;
+    this.checkDailyReset();
+    return { ...this.settings, mediaLibrary: [...this.settings.mediaLibrary] };
   }
 
   public save(newSettings: Partial<AppSettings>): void {
@@ -75,6 +78,7 @@ export class SettingsManager {
       }
 
       fs.writeFileSync(this.filePath, JSON.stringify(this.settings, null, 2), 'utf-8');
+      this.onChange?.({ ...this.settings });
     } catch (error) {
       console.error('Failed to save settings:', error);
     }

@@ -40,3 +40,10 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Keep the buildless promotional site in source control
+!website/dist/
+!website/dist/**
+# Site helper local state
+website/.git/
+website/.openai/*.local.json

@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS = {
   startOnBoot: true,
   sound: true,
   alwaysVisible: true,
-  themeHue: 263, // default purple UI hue
+  themeHue: 153, // soft green companion theme
   customVideoPath: null as string | null,
   customSoundPath: null as string | null,
   keyingMode: 'auto' as 'auto' | 'native' | 'none',

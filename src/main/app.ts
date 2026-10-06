@@ -4,6 +4,13 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 
+// Retain the original app-data directory when upgrading from the starter-named app.
+// The public app name and installer branding are Pixel Buddy.
+const legacyUserData = path.join(app.getPath('appData'), 'my-app');
+if (fs.existsSync(path.join(legacyUserData, 'settings.json'))) {
+  app.setPath('userData', legacyUserData);
+}
+
 // Suppress harmless Windows GPU shader cache permission errors in console
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
@@ -57,9 +64,9 @@ function safeSetIgnoreMouseEvents(win: BrowserWindow, ignore: boolean, forward: 
 
 function getBottomRightPosition(width: number, height: number): { x: number; y: number } {
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
-  const x = screenWidth - width - 20; // 20px padding from right
-  const y = screenHeight - height - 20; // 20px padding from bottom
+  const { x: originX, y: originY, width: screenWidth, height: screenHeight } = primaryDisplay.workArea;
+  const x = originX + screenWidth - width - 20;
+  const y = originY + screenHeight - height - 20;
   return { x, y };
 }
 
@@ -138,7 +145,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+    if (/^https?:\/\//i.test(details.url)) shell.openExternal(details.url);
     return { action: 'deny' };
   });
 
@@ -169,7 +176,9 @@ app.whenReady().then(() => {
   });
 
   // Initialize managers
-  settingsManager = new SettingsManager();
+  settingsManager = new SettingsManager((settings) => {
+    mainWindow?.webContents.send('settings:updated', settings);
+  });
   activityMonitor = new ActivityMonitor();
   
   // Setup IPC and scheduler
@@ -223,7 +232,9 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('settings:save', (_, newSettings) => {
+    const previous = settingsManager.getSettings();
     settingsManager.save(newSettings);
+    scheduler.handleSettingsChanged(previous);
     // Notify renderer that settings updated
     if (mainWindow) {
       mainWindow.webContents.send('settings:updated', settingsManager.getSettings());
@@ -250,6 +261,9 @@ app.whenReady().then(() => {
 
   ipcMain.on('scheduler:reset', () => {
     scheduler.handleReset();
+  });
+  ipcMain.on('scheduler:toggle-pause', () => {
+    scheduler.getStateMachine().togglePause();
   });
 
   ipcMain.on('scheduler:log-hydration', () => {
@@ -428,6 +442,9 @@ app.whenReady().then(() => {
   // Delete a specific media item from the library
   ipcMain.handle('media:delete-library-item', (_, filePath: string) => {
     try {
+      if (!settingsManager.getSettings().mediaLibrary.includes(filePath)) {
+        return settingsManager.getSettings().mediaLibrary;
+      }
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
@@ -573,17 +590,18 @@ app.whenReady().then(() => {
         let overSpeech = false;
         if (hasSpeech) {
           // Bubble is above the buddy, roughly 240px wide, 140px high
-          overSpeech = rx >= bounds.width - 265 && rx <= bounds.width && ry >= 0 && ry <= bounds.height - 135;
+          overSpeech = rx >= bounds.width - 300 && rx <= bounds.width && ry >= 0 && ry <= bounds.height - 135;
         }
 
         // 4. Widgets panel (if active and in WORKING/SNOOZE state)
         let overWidgets = false;
         if (isWidgetsVisible && (state === 'WORKING' || state === 'SNOOZE')) {
           // Widgets are on the left side: from x=0 to x=195 (assuming window width is 340)
-          overWidgets = rx >= 0 && rx <= 195 && ry >= 0 && ry <= bounds.height;
+          overWidgets = rx >= 0 && rx <= bounds.width - 165 && ry >= 0 && ry <= bounds.height;
         }
 
-        if (overHeader || overBuddy || overSpeech || overWidgets) {
+        const overWidgetToggle = rx >= bounds.width - 205 && rx <= bounds.width - 165 && ry >= bounds.height - 105 && ry <= bounds.height - 45;
+        if (overHeader || overBuddy || overSpeech || overWidgets || overWidgetToggle) {
           shouldIgnore = false;
         }
       }
@@ -605,12 +623,15 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  scheduler.stop();
-  trayManager.destroy();
+  scheduler?.stop();
+  trayManager?.destroy();
 });
 
 // Helper: copy a media file into the app's userData/media directory
 async function copyMediaToLibrary(sourcePath: string): Promise<string> {
+  if (typeof sourcePath !== 'string' || !/\.(mp4|webm|gif|png|webp|apng)$/i.test(sourcePath)) {
+    throw new Error('Unsupported companion media');
+  }
   const userDataPath = app.getPath('userData');
   const mediaDir = path.join(userDataPath, 'media');
   if (!fs.existsSync(mediaDir)) {

@@ -60,8 +60,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
   };
 
   const incrementWater = () => {
-    const newCount = Math.min(hydrationGoal, hydrationDrankToday + 1);
-    onSaveSettings({ hydrationDrankToday: newCount });
+    window.api.logHydration();
   };
 
   const decrementWater = () => {
@@ -91,7 +90,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
       <div className="widget-content">
         {activeTab === 'timer' ? (
           <div className="widget-timer-tab">
-            <div className="widget-section-title">Break Countdown</div>
+            <div className="widget-section-title">{stateData.isPaused ? 'Reminders paused' : 'Next little break'}</div>
             <div className="widget-countdown">{getRemainingTimeStr()}</div>
             
             <div className="widget-progress-container">
@@ -106,6 +105,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
             </div>
 
             <div className="widget-controls">
+              <button className="btn btn-secondary btn-sm" onClick={() => window.api.togglePause()} title="Pause or resume reminders">{stateData.isPaused ? 'Resume' : 'Pause'}</button>
               <button className="btn btn-secondary btn-sm" onClick={() => window.api.reset()} title="Reset Work Timer">
                 Reset
               </button>
@@ -127,14 +127,17 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
             {/* Micro water glass icons grid */}
             <div className="widget-water-grid">
               {Array.from({ length: hydrationGoal }).map((_, i) => (
-                <div
+                <button
+                  type="button"
+                  aria-label={`Glass ${i + 1}`}
+                  aria-pressed={i < hydrationDrankToday}
                   key={i}
                   className={`widget-water-cup ${i < hydrationDrankToday ? 'filled' : ''}`}
                   onClick={() => handleWaterClick(i)}
                   title={`Glass ${i + 1}`}
                 >
                   💧
-                </div>
+                </button>
               ))}
             </div>
 

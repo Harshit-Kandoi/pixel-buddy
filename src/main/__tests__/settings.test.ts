@@ -42,14 +42,14 @@ describe('SettingsManager', () => {
 
   test('loads default settings if settings.json does not exist', () => {
     const manager = new SettingsManager();
-    expect(manager.getSettings()).toEqual(DEFAULT_SETTINGS);
+    expect(manager.getSettings()).toEqual({ ...DEFAULT_SETTINGS, hydrationLastResetDate: new Date().toLocaleDateString('en-CA') });
 
     // Verify it created the settings.json file automatically
     const filePath = path.join(TEST_DIR, 'settings.json');
     expect(fs.existsSync(filePath)).toBe(true);
 
     const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    expect(content).toEqual(DEFAULT_SETTINGS);
+    expect(content).toEqual({ ...DEFAULT_SETTINGS, hydrationLastResetDate: new Date().toLocaleDateString('en-CA') });
   });
 
   test('loads existing settings from settings.json', () => {
@@ -98,4 +98,15 @@ describe('SettingsManager', () => {
       path: '/mock/exe/path',
     });
   });
+  test('resets daily counters at midnight while the app stays open', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 5, 23, 59));
+      const manager = new SettingsManager();
+      manager.save({ hydrationDrankToday: 7, statsFocusMinutesToday: 90 });
+      vi.setSystemTime(new Date(2026, 9, 6, 0, 1));
+      expect(manager.getSettings()).toMatchObject({ hydrationDrankToday: 0, statsFocusMinutesToday: 0, hydrationLastResetDate: '2026-10-06' });
+    } finally { vi.useRealTimers(); }
+  });
+
 });

@@ -13,6 +13,8 @@ declare global {
       snooze(): void
       skip(): void
       reset(): void
+      togglePause(): void
+      getPathForFile(file: File): string
       onUpdate(callback: (data: StateMachineData) => void): () => void
       onTick(callback: (data: StateMachineData) => void): () => void
       getPermissionStatus(): Promise<boolean>

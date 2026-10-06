@@ -5,6 +5,7 @@ import { APP_STATES } from '../utils/constants';
 
 export class TrayManager {
   private tray: Tray | null = null;
+  private lastMenuKey = '';
   private onOpenSettings: () => void;
   private onTogglePause: () => void;
   private onReset: () => void;
@@ -20,13 +21,12 @@ export class TrayManager {
   }
 
   public init(): void {
-    // Load the icon. Support template image on Mac for dark menu bar compatibility.
+    // Keep the colored buddy artwork; a template mask would flatten its background.
     const iconPath = path.join(__dirname, '../../resources/icon.png');
     let image = nativeImage.createFromPath(iconPath);
     
     if (process.platform === 'darwin') {
       image = image.resize({ width: 16, height: 16 });
-      image.setTemplateImage(true);
     } else {
       image = image.resize({ width: 24, height: 24 });
     }
@@ -90,6 +90,9 @@ export class TrayManager {
       }
     }
 
+    const menuKey = `${statusText}:${timeText}:${data.isPaused}`;
+    if (menuKey === this.lastMenuKey) return;
+    this.lastMenuKey = menuKey;
     const contextMenu = Menu.buildFromTemplate([
       { label: `Pixel Buddy - ${statusText} ${timeText ? `(${timeText})` : ''}`, enabled: false },
       { type: 'separator' },
