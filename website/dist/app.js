@@ -38,9 +38,18 @@ loadRelease();
 const command = document.querySelector('#install-command');
 const platformSelect = document.querySelector('#terminal-platform');
 const copyStatus = document.querySelector('#copy-status');
+const isWindows = /Windows/i.test(navigator.userAgent);
+const commandHint = document.querySelector('#command-hint');
 function updateCommand() {
-  const platform = platformSelect.value === 'auto' ? '' : ` --platform ${platformSelect.value}`;
-  command.textContent = `curl -fsSLo pixel-buddy-download.sh https://raw.githubusercontent.com/${repository}/main/scripts/download.sh\nbash pixel-buddy-download.sh${platform}`;
+  const choice = platformSelect.value;
+  if (choice === 'windows' || (choice === 'auto' && isWindows)) {
+    command.textContent = `irm https://raw.githubusercontent.com/${repository}/main/scripts/download.ps1 | iex`;
+    commandHint.textContent = 'Paste into PowerShell. Saves a verified installer to your Downloads folder.';
+  } else {
+    const platform = choice === 'auto' ? '' : ` --platform ${choice}`;
+    command.textContent = `curl -fsSLo pixel-buddy-download.sh https://raw.githubusercontent.com/${repository}/main/scripts/download.sh\nbash pixel-buddy-download.sh${platform}`;
+    commandHint.textContent = 'Paste into Terminal. Saves a checksum-verified installer to the current folder.';
+  }
   copyStatus.textContent = '';
 }
 platformSelect.addEventListener('change', updateCommand);

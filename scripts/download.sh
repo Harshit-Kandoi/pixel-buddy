@@ -22,9 +22,11 @@ while [ "$#" -gt 0 ]; do
     *) usage >&2; exit 2 ;;
   esac
 done
-for tool in curl python3; do
-  command -v "$tool" >/dev/null || { echo "Please install $tool first." >&2; exit 1; }
-done
+command -v curl >/dev/null || { echo "Please install curl first." >&2; exit 1; }
+# Windows usually ships Python as `python`, not `python3`
+if command -v python3 >/dev/null && python3 -c '' 2>/dev/null; then py=python3
+elif command -v python >/dev/null && python -c 'import sys; sys.exit(sys.version_info[0] < 3)' 2>/dev/null; then py=python
+else echo "Please install Python 3 first. On Windows, the PowerShell command on the website needs nothing extra." >&2; exit 1; fi
 if [ "$platform" = 'auto' ]; then
   case "$(uname -s)" in
     Darwin) case "$(uname -m)" in arm64) platform='mac-arm64' ;; x86_64) platform='mac-x64' ;; *) echo 'Unsupported Mac architecture.' >&2; exit 1 ;; esac ;;
@@ -41,7 +43,7 @@ if ! curl --fail --silent --show-error --location --retry 2 --connect-timeout 15
   echo "No release could be downloaded. Check https://github.com/$repo/releases" >&2
   exit 1
 fi
-python3 - "$workdir/release.json" "$platform" "$workdir" <<'PY'
+"$py" - "$workdir/release.json" "$platform" "$workdir" <<'PY'
 import json, pathlib, re, sys
 release_file, platform, destination = sys.argv[1:]
 patterns = {'windows': r'windows-x64\.exe$', 'mac-arm64': r'mac-arm64\.dmg$', 'mac-x64': r'mac-x64\.dmg$', 'linux': r'linux-x64\.AppImage$', 'linux-deb': r'linux-(x64|amd64)\.deb$'}
@@ -66,7 +68,7 @@ if [ -e "$outdir/$filename" ]; then echo "Already exists: $outdir/$filename. Cho
 printf 'Downloading %s…\n' "$filename"
 curl --fail --silent --show-error --location --retry 2 --connect-timeout 15 --max-time 1800 "$(cat "$workdir/installer.url")" -o "$workdir/$filename"
 curl --fail --silent --show-error --location --retry 2 --connect-timeout 15 --max-time 90 "$(cat "$workdir/checksums.url")" -o "$workdir/SHA256SUMS"
-python3 - "$workdir" "$filename" "$outdir" <<'PY'
+"$py" - "$workdir" "$filename" "$outdir" <<'PY'
 import hashlib, pathlib, shutil, sys
 working, name, output = sys.argv[1:]
 working = pathlib.Path(working)
