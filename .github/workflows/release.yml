@@ -24,6 +24,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # uiohook-napi is rebuilt for Electron on install and needs the X11 headers on Linux
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxtst-dev libxt-dev libxinerama-dev libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev libxkbfile-dev
       - run: npm ci
       - name: Check release version
         if: startsWith(github.ref, 'refs/tags/')
