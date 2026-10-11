@@ -46,7 +46,7 @@ fi
 "$py" - "$workdir/release.json" "$platform" "$workdir" <<'PY'
 import json, pathlib, re, sys
 release_file, platform, destination = sys.argv[1:]
-patterns = {'windows': r'windows-x64\.exe$', 'mac-arm64': r'mac-arm64\.dmg$', 'mac-x64': r'mac-x64\.dmg$', 'linux': r'linux-x64\.AppImage$', 'linux-deb': r'linux-(x64|amd64)\.deb$'}
+patterns = {'windows': r'windows-x64\.exe$', 'mac-arm64': r'mac-arm64\.dmg$', 'mac-x64': r'mac-x64\.dmg$', 'linux': r'linux-(x64|x86_64)\.AppImage$', 'linux-deb': r'linux-(x64|amd64)\.deb$'}
 assets = json.loads(pathlib.Path(release_file).read_text()).get('assets', [])
 selected = [a for a in assets if a.get('state') == 'uploaded' and a.get('name', '').startswith('pixel-buddy-') and re.search(patterns[platform], a['name'])]
 checksums = [a for a in assets if a.get('state') == 'uploaded' and a.get('name') == 'SHA256SUMS']
