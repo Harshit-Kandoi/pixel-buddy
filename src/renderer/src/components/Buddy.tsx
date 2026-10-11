@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import buddyMascot from '../assets/buddy.svg';
+import { toMediaUrl } from '../../../utils/mediaUrl';
 
 interface BuddyProps {
   state: string;
@@ -157,7 +158,7 @@ export const Buddy: React.FC<BuddyProps> = ({
   const bgTickRef = useRef(0);
   const rafRef = useRef<number>(0);
 
-  const mediaSrc = customVideoPath ? `buddy-media://${customVideoPath}` : buddyMascot;
+  const mediaSrc = customVideoPath ? toMediaUrl(customVideoPath) : buddyMascot;
   const isImage = !customVideoPath || /\.(gif|png|webp|apng)$/i.test(customVideoPath);
 
   // Animation class goes on the wrapper div, NOT the media element
@@ -169,7 +170,8 @@ export const Buddy: React.FC<BuddyProps> = ({
   // Re-init when source or keying mode changes
   useEffect(() => {
     bgTickRef.current = 0;
-    glStateRef.current = null; // will be re-created in next effect run
+    glStateRef.current = null;
+    setVideoError(false); // will be re-created in next effect run
   }, [customVideoPath, keyingMode, debugKeyer]);
 
   useEffect(() => {
@@ -340,6 +342,8 @@ export const Buddy: React.FC<BuddyProps> = ({
     <div
       className={`buddy-container ${containerAnim}`}
       onMouseDown={onMouseDown}
+      // Block Chromium's native image drag — it swallows mouseup and leaves input stuck
+      onDragStart={(e) => e.preventDefault()}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -347,6 +351,7 @@ export const Buddy: React.FC<BuddyProps> = ({
         isImage ? (
           <img
             src={mediaSrc}
+            draggable={false}
             className="buddy-media"
             style={mediaCss}
             alt="Buddy Companion"

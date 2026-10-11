@@ -49,7 +49,7 @@ window.api = {
     root.style.width = `${width}px`; root.style.height = `${height}px`;
   },
   onShowSettings: callback => subscribe(showSettings, callback),
-  setSettingsVisible() {}, setDialogueActive() {}, setWidgetsVisible() {},
+  setSettingsVisible() {}, setHitRects() {},
   logHydration: () => scheduler.handleLogHydration(),
   snoozeHydration: () => scheduler.handleSnoozeHydration(),
   dismissHydration: () => scheduler.handleDismissHydration(),

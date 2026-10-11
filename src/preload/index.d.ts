@@ -23,8 +23,7 @@ declare global {
       resize(width: number, height: number): void
       onShowSettings(callback: () => void): () => void
       setSettingsVisible(visible: boolean): void
-      setDialogueActive(active: boolean): void
-      setWidgetsVisible(visible: boolean): void
+      setHitRects(rects: { x: number; y: number; width: number; height: number }[]): void
       logHydration(): void
       snoozeHydration(): void
       dismissHydration(): void

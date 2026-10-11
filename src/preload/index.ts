@@ -43,8 +43,7 @@ const api = {
     return () => ipcRenderer.removeListener('window:show-settings', subscription)
   },
   setSettingsVisible: (visible) => ipcRenderer.send('window:settings-visibility', visible),
-  setDialogueActive: (active) => ipcRenderer.send('window:dialogue-active', active),
-  setWidgetsVisible: (visible) => ipcRenderer.send('window:widgets-visibility', visible),
+  setHitRects: (rects) => ipcRenderer.send('window:hit-rects', rects),
   logHydration: () => ipcRenderer.send('scheduler:log-hydration'),
   snoozeHydration: () => ipcRenderer.send('scheduler:snooze-hydration'),
   dismissHydration: () => ipcRenderer.send('scheduler:dismiss-hydration'),

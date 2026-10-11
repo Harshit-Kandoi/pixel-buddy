@@ -20,7 +20,7 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
-    "site:dev": "python3 -m http.server 4173 --directory website/dist",
+    "site:dev": "node scripts/serve-website.mjs",
     "download": "bash scripts/download.sh",
     "site:check": "node scripts/check-website.mjs",
     "app:preview": "vite --config vite.preview.config.ts",

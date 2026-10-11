@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppSettings } from '../../../utils/types';
+import { toMediaUrl } from '../../../utils/mediaUrl';
+import buddyMascot from '../assets/buddy.svg';
 
 interface SettingsProps {
   settings: AppSettings;
@@ -8,10 +10,10 @@ interface SettingsProps {
   onHeaderMouseDown?: (e: React.MouseEvent) => void;
 }
 
-// Get filename from absolute path
+// Friendly label from a library path like custom_buddy_<ts>__<original>.<ext>
 function getFilename(p: string): string {
-  const parts = p.split(/[/\\]/);
-  return parts[parts.length - 1].replace(/^custom_buddy_\d+/, '').replace(/^\.|^_/, '') || parts[parts.length - 1];
+  const file = p.split(/[/\\]/).pop() ?? '';
+  return file.replace(/\.[^.]+$/, '').replace(/^custom_buddy_\d+(__)?/, '');
 }
 
 // Get media extension for label
@@ -144,7 +146,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
       setIsSoundPlaying(false);
       return;
     }
-    const audio = new Audio(`buddy-media://${customSoundPath}`);
+    const audio = new Audio(toMediaUrl(customSoundPath));
     soundPreviewRef.current = audio;
     audio.play().then(() => {
       setIsSoundPlaying(true);
@@ -388,77 +390,72 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
             <div className="setting-row" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '12px' }}>
               <div className="setting-header-row" style={{ marginBottom: '8px' }}>
                 <span className="setting-label">Companion Avatar</span>
-                <button className="btn btn-secondary btn-sm non-draggable" onClick={handleSelectMedia} title="Add new media to library">
-                  + Add
-                </button>
               </div>
 
-              {/* Wallpaper-engine-style grid */}
-              {mediaLibrary.length > 0 ? (
-                <div className="media-library-grid">
-                  {/* "Default" card */}
-                  <div
-                    className={`media-card ${!customVideoPath ? 'media-card-active' : ''}`}
-                    onClick={() => handleResetMedia()}
-                    title="Default Pixel Companion"
-                  >
-                    <div className="media-card-thumb media-card-default">
-                      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.6">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M8 12s1.5-3 4-3 4 3 4 3" />
-                        <circle cx="9" cy="10" r="1" fill="currentColor" />
-                        <circle cx="15" cy="10" r="1" fill="currentColor" />
-                      </svg>
-                    </div>
-                    <div className="media-card-label">Default</div>
+              {/* Avatar grid: default mascot, uploaded media, then an "add" tile */}
+              <div className="media-library-grid">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className={`media-card ${!customVideoPath ? 'media-card-active' : ''}`}
+                  onClick={() => handleResetMedia()}
+                  title="Default Pixel Companion"
+                >
+                  <div className="media-card-thumb">
+                    <img src={buddyMascot} alt="Default buddy" className="media-card-preview" />
+                    {!customVideoPath && <div className="media-card-check">✓</div>}
                   </div>
+                  <div className="media-card-label">Pixel Buddy</div>
+                </div>
 
-                  {/* Library cards */}
-                  {mediaLibrary.map((p) => (
+                {mediaLibrary.map((p, i) => {
+                  const isActive = customVideoPath === p;
+                  const name = getFilename(p) || `Custom ${i + 1}`;
+                  return (
                     <div
                       key={p}
-                      className={`media-card ${customVideoPath === p ? 'media-card-active' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      className={`media-card ${isActive ? 'media-card-active' : ''}`}
                       onClick={() => handleSelectLibraryItem(p)}
-                      title={getFilename(p)}
+                      title={name}
                     >
                       <div className="media-card-thumb">
                         {/\.(gif|png|webp|apng)$/i.test(p) ? (
-                          <img src={`buddy-media://${p}`} alt={getFilename(p)} className="media-card-preview" />
+                          <img src={toMediaUrl(p)} alt={name} className="media-card-preview" />
                         ) : (
-                          <div className="media-card-video-icon">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" opacity="0.5" />
-                            </svg>
-                            <span className="media-card-ext">{getMediaTypeLabel(p)}</span>
-                          </div>
+                          <video src={toMediaUrl(p)} className="media-card-preview" muted loop autoPlay playsInline />
                         )}
-                        {/* Active indicator */}
-                        {customVideoPath === p && (
-                          <div className="media-card-active-dot" />
-                        )}
+                        <span className="media-card-ext">{getMediaTypeLabel(p)}</span>
+                        {isActive && <div className="media-card-check">✓</div>}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${name}`}
+                          className="media-card-delete non-draggable"
+                          onClick={(e) => handleDeleteLibraryItem(p, e)}
+                          title="Remove from library"
+                        >
+                          ×
+                        </button>
                       </div>
-                      <div className="media-card-label">{getFilename(p)}</div>
-                      {/* Delete button */}
-                      <button
-                        className="media-card-delete non-draggable"
-                        onClick={(e) => handleDeleteLibraryItem(p, e)}
-                        title="Remove from library"
-                      >
-                        ×
-                      </button>
+                      <div className="media-card-label">{name}</div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                /* Empty state — drag & drop prompt */
-                <div className="media-empty-state" onClick={handleSelectMedia}>
-                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.4">
-                    <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="4 2" />
-                    <path d="M12 8v8M8 12h8" />
-                  </svg>
-                  <p>Drag & drop or click to add<br/>MP4 · WebM · GIF · PNG</p>
-                </div>
-              )}
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className="media-card media-card-add non-draggable"
+                  onClick={handleSelectMedia}
+                  title="Add a GIF, PNG, WebP, MP4 or WebM"
+                >
+                  <div className="media-card-thumb">
+                    <span className="media-card-add-icon">+</span>
+                  </div>
+                  <div className="media-card-label">Add avatar</div>
+                </button>
+              </div>
+              <p className="setting-help">Drop a GIF, PNG, WebP or a green-screen MP4/WebM here or on the buddy.</p>
             </div>
 
             {/* Custom Alarm Sound Selector */}

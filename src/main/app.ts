@@ -48,7 +48,7 @@ if (!is.dev) {
 }
 
 // Window size constants
-const DEFAULT_WIDTH = 320;
+const DEFAULT_WIDTH = 400;
 const DEFAULT_HEIGHT = 350;
 
 let lastIgnoreState: boolean | null = null;
@@ -160,8 +160,13 @@ app.whenReady().then(() => {
   // Register media protocol to load local files
   protocol.handle('buddy-media', (request) => {
     try {
-      const urlPath = request.url.replace('buddy-media://', '');
-      const filePath = decodeURIComponent(urlPath);
+      // URLs look like buddy-media://local/<encodeURIComponent(absolutePath)>
+      const filePath = path.resolve(decodeURIComponent(new URL(request.url).pathname.slice(1)));
+      const userData = path.resolve(app.getPath('userData'));
+      const allowed = [path.join(userData, 'media'), path.join(userData, 'sounds')];
+      if (!allowed.some((dir) => filePath.startsWith(dir + path.sep)) || !fs.existsSync(filePath)) {
+        return new Response('Not found', { status: 404 });
+      }
       return net.fetch(pathToFileURL(filePath).toString());
     } catch (err) {
       console.error('Failed to resolve buddy-media URL:', err);
@@ -310,34 +315,31 @@ app.whenReady().then(() => {
   // Renderer only sends drag-start / drag-end. NO drag-move IPC needed.
   let dragStart: { x: number; y: number } | null = null;
   let dragPollInterval: ReturnType<typeof setInterval> | null = null;
+  // Resizes requested while dragging are applied once the drag ends, so the window
+  // never changes size under the cursor mid-drag.
+  let pendingResize: { width: number; height: number } | null = null;
 
   ipcMain.on('window:drag-start', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
       safeSetIgnoreMouseEvents(win, false, false);
       const cursor = screen.getCursorScreenPoint();
-      const bounds = win.getBounds();
-      dragStart = { x: cursor.x - bounds.x, y: cursor.y - bounds.y };
-      const width = bounds.width;
-      const height = bounds.height;
-      let lastX = bounds.x;
-      let lastY = bounds.y;
+      const [startX, startY] = win.getPosition();
+      dragStart = { x: cursor.x - startX, y: cursor.y - startY };
+      let lastX = startX;
+      let lastY = startY;
 
-      // Poll cursor position at ~120fps in main process — zero IPC overhead per frame
+      // Poll cursor position at ~120fps in main process — zero IPC overhead per frame.
+      // setPosition (not setBounds) so the window size can't drift on scaled displays.
       if (dragPollInterval) clearInterval(dragPollInterval);
       dragPollInterval = setInterval(() => {
-        if (!win || !dragStart) return;
+        if (!dragStart || win.isDestroyed()) return;
         const pos = screen.getCursorScreenPoint();
         const nextX = pos.x - dragStart.x;
         const nextY = pos.y - dragStart.y;
 
         if (nextX !== lastX || nextY !== lastY) {
-          win.setBounds({
-            x: nextX,
-            y: nextY,
-            width,
-            height,
-          });
+          win.setPosition(nextX, nextY);
           lastX = nextX;
           lastY = nextY;
         }
@@ -353,9 +355,14 @@ app.whenReady().then(() => {
       clearInterval(dragPollInterval);
       dragPollInterval = null;
     }
+    if (dragStart === null) return;
     dragStart = null;
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) {
+      if (pendingResize) {
+        resizeAnchored(win, pendingResize.width, pendingResize.height);
+        pendingResize = null;
+      }
       const [wx, wy] = win.getPosition();
       const bounds = win.getBounds();
       const currentDisplay = screen.getDisplayMatching(bounds);
@@ -368,6 +375,9 @@ app.whenReady().then(() => {
       win.setPosition(clampedX, clampedY);
       settingsManager.save({ windowX: clampedX, windowY: clampedY });
       win.webContents.send('settings:updated', settingsManager.getSettings());
+      // Force-reapply click-through (drop the cache) so the hit-test poll starts from a known state
+      lastIgnoreState = null;
+      lastForwardState = null;
       safeSetIgnoreMouseEvents(win, true, true);
     }
   });
@@ -503,57 +513,29 @@ app.whenReady().then(() => {
     return null;
   });
 
-  // Relative resize anchored to dynamic screen quadrant
+  // The buddy is laid out in the window's bottom-right corner, so resizes keep that
+  // corner fixed on screen — the buddy stays put while bubbles/panels grow around it.
   ipcMain.on('window:resize', (event, width, height) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    if (win) {
-      const [currentWidth, currentHeight] = win.getSize();
-      if (currentWidth !== width || currentHeight !== height) {
-        const bounds = win.getBounds();
-        const currentDisplay = screen.getDisplayMatching(bounds);
-        const { x: minX, y: minY, width: screenW, height: screenH } = currentDisplay.workArea;
-        
-        const screenCenterX = minX + screenW / 2;
-        const screenCenterY = minY + screenH / 2;
-        
-        // Horizontal anchoring: grow left or right
-        let newX = bounds.x;
-        if (bounds.x + bounds.width / 2 > screenCenterX) {
-          // Right half: grow leftwards (anchor right edge)
-          newX = bounds.x + bounds.width - width;
-        }
-        
-        // Vertical anchoring: grow up or down
-        let newY = bounds.y;
-        if (bounds.y + bounds.height / 2 > screenCenterY) {
-          // Bottom half: grow upwards (anchor bottom edge)
-          newY = bounds.y + bounds.height - height;
-        }
-        
-        // Clamp bounds to prevent window from going off screen boundaries
-        newX = Math.max(minX, Math.min(newX, minX + screenW - width));
-        newY = Math.max(minY, Math.min(newY, minY + screenH - height));
-        
-        win.setBounds({ x: newX, y: newY, width, height }, true); // Animate transition
-      }
+    if (!win) return;
+    if (dragStart !== null) {
+      pendingResize = { width, height };
+      return;
     }
+    resizeAnchored(win, width, height);
   });
 
-  // Start mouse polling to check if cursor is over solid elements
+  // Click-through hit-testing: the renderer reports rects of its visible UI; the cursor
+  // over any of them makes the window interactive, anywhere else clicks pass through.
   let isSettingsVisible = true; // start with settings visible
-  let hasActiveDialogue = false;
-  let isWidgetsVisible = false;
+  let hitRects: { x: number; y: number; width: number; height: number }[] = [];
 
   ipcMain.on('window:settings-visibility', (_, visible) => {
     isSettingsVisible = visible;
   });
 
-  ipcMain.on('window:dialogue-active', (_, active) => {
-    hasActiveDialogue = active;
-  });
-
-  ipcMain.on('window:widgets-visibility', (_, visible) => {
-    isWidgetsVisible = visible;
+  ipcMain.on('window:hit-rects', (_, rects) => {
+    hitRects = Array.isArray(rects) ? rects : [];
   });
 
   setInterval(() => {
@@ -562,54 +544,16 @@ app.whenReady().then(() => {
 
     const cursor = screen.getCursorScreenPoint();
     const bounds = mainWindow.getBounds();
-
-    // Check if cursor is over the window bounds first
     const rx = cursor.x - bounds.x;
     const ry = cursor.y - bounds.y;
 
-    let shouldIgnore = true;
+    const overUi = isSettingsVisible || hitRects.some((r) =>
+      rx >= r.x && rx <= r.x + r.width && ry >= r.y && ry <= r.y + r.height
+    );
 
-    if (isSettingsVisible) {
-      // Settings panel is fully active
-      shouldIgnore = false;
-    } else {
-      const stateData = scheduler.getStateMachine().getData();
-      const state = stateData.state;
-
-      // Check if cursor is within window bounds
-      if (rx >= 0 && rx <= bounds.width && ry >= 0 && ry <= bounds.height) {
-        // 1. Settings gear & close button area (top right)
-        const overHeader = rx >= bounds.width - 95 && rx <= bounds.width && ry >= 0 && ry <= 45;
-
-        // 2. Buddy container (bottom right corner)
-        // Buddy is 140x140. With paddings, checking bottom right 165x165.
-        const overBuddy = rx >= bounds.width - 165 && rx <= bounds.width && ry >= bounds.height - 165 && ry <= bounds.height;
-
-        // 3. Speech bubble (if active)
-        const hasSpeech = state === 'POPUP' || state === 'BREAK' || state === 'IDLE' || hasActiveDialogue;
-        let overSpeech = false;
-        if (hasSpeech) {
-          // Bubble is above the buddy, roughly 240px wide, 140px high
-          overSpeech = rx >= bounds.width - 300 && rx <= bounds.width && ry >= 0 && ry <= bounds.height - 135;
-        }
-
-        // 4. Widgets panel (if active and in WORKING/SNOOZE state)
-        let overWidgets = false;
-        if (isWidgetsVisible && (state === 'WORKING' || state === 'SNOOZE')) {
-          // Widgets are on the left side: from x=0 to x=195 (assuming window width is 340)
-          overWidgets = rx >= 0 && rx <= bounds.width - 165 && ry >= 0 && ry <= bounds.height;
-        }
-
-        const overWidgetToggle = rx >= bounds.width - 205 && rx <= bounds.width - 165 && ry >= bounds.height - 105 && ry <= bounds.height - 45;
-        if (overHeader || overBuddy || overSpeech || overWidgets || overWidgetToggle) {
-          shouldIgnore = false;
-        }
-      }
-    }
-
-    // Set ignore state. Note: forward: true lets the renderer still receive mouse events
-    safeSetIgnoreMouseEvents(mainWindow, shouldIgnore, true);
-  }, 100);
+    // forward: true lets the renderer still receive mouse-move events while click-through
+    safeSetIgnoreMouseEvents(mainWindow, !overUi, true);
+  }, 50);
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -627,6 +571,15 @@ app.on('will-quit', () => {
   trayManager?.destroy();
 });
 
+function resizeAnchored(win: BrowserWindow, width: number, height: number): void {
+  const bounds = win.getBounds();
+  if (bounds.width === width && bounds.height === height) return;
+  const { x: minX, y: minY, width: screenW, height: screenH } = screen.getDisplayMatching(bounds).workArea;
+  const newX = Math.max(minX, Math.min(bounds.x + bounds.width - width, minX + screenW - width));
+  const newY = Math.max(minY, Math.min(bounds.y + bounds.height - height, minY + screenH - height));
+  win.setBounds({ x: newX, y: newY, width, height });
+}
+
 // Helper: copy a media file into the app's userData/media directory
 async function copyMediaToLibrary(sourcePath: string): Promise<string> {
   if (typeof sourcePath !== 'string' || !/\.(mp4|webm|gif|png|webp|apng)$/i.test(sourcePath)) {
@@ -638,7 +591,9 @@ async function copyMediaToLibrary(sourcePath: string): Promise<string> {
     fs.mkdirSync(mediaDir, { recursive: true });
   }
   const ext = path.extname(sourcePath);
-  const destFileName = `custom_buddy_${Date.now()}${ext}`;
+  // Keep the original name (sanitised) so the library can show a friendly label.
+  const baseName = path.basename(sourcePath, ext).replace(/[^\w\- ]+/g, '').trim().slice(0, 40);
+  const destFileName = `custom_buddy_${Date.now()}${baseName ? `__${baseName}` : ''}${ext}`;
   const destPath = path.join(mediaDir, destFileName);
   fs.copyFileSync(sourcePath, destPath);
   return destPath;

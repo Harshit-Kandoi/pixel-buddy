@@ -5,12 +5,14 @@ interface WidgetPanelProps {
   stateData: StateMachineData;
   settings: AppSettings;
   onSaveSettings: (settings: Partial<AppSettings>) => void;
+  closing?: boolean;
 }
 
 export const WidgetPanel: React.FC<WidgetPanelProps> = ({
   stateData,
   settings,
   onSaveSettings,
+  closing = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'timer' | 'water'>('timer');
 
@@ -69,7 +71,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
   };
 
   return (
-    <div className="widget-panel non-draggable">
+    <div className={`widget-panel non-draggable ${closing ? 'closing' : ''}`}>
       {/* Tab headers */}
       <div className="widget-tabs">
         <button
