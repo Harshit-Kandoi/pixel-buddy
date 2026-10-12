@@ -1,22 +1,35 @@
 import { FRAME_TAG, KEY_PAGES_ENABLED, type FrameMessage, type Rect } from './protocol';
 
-// Adds the buddy to every tab as an isolated, transparent iframe over the viewport. The
-// frame only takes the pointer over the buddy's visible UI; everywhere else clicks go
+// Adds the buddy to every tab as an isolated, transparent iframe in the page corner. The
+// frame only takes the pointer over the buddy's visible UI; the rest of its box clicks
 // through to the page, like the desktop app's click-through window.
 
+type Placement = Extract<FrameMessage, { type: 'frame' }>;
+
 let frame: HTMLIFrameElement | null = null;
+let placement: Placement = { type: 'frame', full: false, right: 0, bottom: 0, width: 400, height: 350 };
 let visible = false;
 let interactive = false;
 let hitRects: Rect[] = [];
 
+const clamp = (value: number, max: number) => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
+
 function render(): void {
   if (!frame) return;
+  const box: Record<string, string> = placement.full
+    ? { top: '0', left: '0', right: 'auto', bottom: 'auto', width: '100%', height: '100%' }
+    : {
+        top: 'auto',
+        left: 'auto',
+        right: `${clamp(placement.right, window.innerWidth - placement.width)}px`,
+        bottom: `${clamp(placement.bottom, window.innerHeight - placement.height)}px`,
+        width: `${placement.width}px`,
+        height: `${placement.height}px`,
+      };
   const style: Record<string, string> = {
     all: 'initial',
     position: 'fixed',
-    inset: '0',
-    width: '100%',
-    height: '100%',
+    ...box,
     border: '0',
     margin: '0',
     padding: '0',
@@ -51,6 +64,7 @@ window.addEventListener('message', event => {
   if (!frame || event.source !== frame.contentWindow) return;
   const message = (event.data as Record<string, FrameMessage> | null)?.[FRAME_TAG];
   if (!message) return;
+  if (message.type === 'frame') placement = message;
   if (message.type === 'hitRects') hitRects = message.rects;
   if (message.type === 'interactive') interactive = message.value;
   if (message.type === 'visible') {
@@ -63,12 +77,24 @@ window.addEventListener('message', event => {
 // While click-through, watch the page's pointer and take it back over the buddy's UI.
 window.addEventListener('mousemove', event => {
   if (!frame || !visible || interactive) return;
-  const { clientX: x, clientY: y } = event;
+  const box = frame.getBoundingClientRect();
+  const x = event.clientX - box.left;
+  const y = event.clientY - box.top;
   if (hitRects.some(r => x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)) {
     interactive = true;
     render();
   }
 }, { capture: true, passive: true });
+
+window.addEventListener('resize', render, { passive: true });
+
+// Reloading, updating, or removing the extension kills the frame's page but leaves this
+// script running in tabs that were already open; clear the dead frame off the page.
+const orphanCheck = setInterval(() => {
+  if (chrome.runtime?.id) return;
+  clearInterval(orphanCheck);
+  unmount();
+}, 2000);
 
 // Page input counts toward smart monitoring, like the desktop app's global input hook.
 let lastPing = 0;

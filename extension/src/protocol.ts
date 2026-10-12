@@ -19,6 +19,8 @@ export type Push =
 
 // Messages from the overlay iframe to the content script that hosts it.
 export type FrameMessage =
+  | { type: 'frame'; full: true }
+  | { type: 'frame'; full: false; right: number; bottom: number; width: number; height: number }
   | { type: 'visible'; visible: boolean }
   | { type: 'hitRects'; rects: Rect[] }
   | { type: 'interactive'; value: boolean };
