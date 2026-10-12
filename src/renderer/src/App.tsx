@@ -13,11 +13,12 @@ const COMPANION_WIDTH = 400;
 const COMPANION_HEIGHT = 350;
 const HIT_SELECTOR = '.buddy-container, .speech-bubble, .widget-panel, .side-controls, .settings-trigger, .display-close';
 
-function App(): React.JSX.Element {
+// The Chrome extension mounts one App per tab, so it starts with settings closed.
+function App({ initialShowSettings = true }: { initialShowSettings?: boolean }): React.JSX.Element {
   const [stateData, setStateData] = useState<StateMachineData | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const showHydrationReminder = !!stateData?.hydrationReminderActive && stateData.state !== 'POPUP' && stateData.state !== 'BREAK';
-  const [showSettings, setShowSettings] = useState(true);
+  const [showSettings, setShowSettings] = useState(initialShowSettings);
   const [showWidgets, setShowWidgets] = useState(false);
   const [widgetsClosing, setWidgetsClosing] = useState(false);
   const [currentTip, setCurrentTip] = useState('');
