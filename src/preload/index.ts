@@ -51,7 +51,7 @@ const api = {
   // Window Drag API
   dragStart: () => ipcRenderer.send('window:drag-start'),
   dragMove: () => ipcRenderer.send('window:drag-move'),
-  dragEnd: () => ipcRenderer.send('window:drag-end'),
+  dragEnd: (anchor) => ipcRenderer.send('window:drag-end', anchor),
 
   // Media Selection API
   selectMedia: () => ipcRenderer.invoke('media:select'),

@@ -24,13 +24,17 @@ let dragFrom = DEFAULT_POSITION;
 const clamp = (value: number, max: number) => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
 // Only meaningful while the frame covers the viewport; otherwise the content script clamps.
 const clampToViewport = (p: Position): Position => ({
+  ...p,
   right: clamp(p.right, window.innerWidth - size.width),
   bottom: clamp(p.bottom, window.innerHeight - size.height),
 });
 const expanded = () => window.innerWidth > size.width || window.innerHeight > size.height;
 
 function layout(): void {
-  const at = dragging ? clampToViewport(position) : DEFAULT_POSITION;
+  // Unclamped while dragging, so the buddy can follow the pointer to the page edge.
+  const at = dragging ? position : DEFAULT_POSITION;
+  document.documentElement.classList.toggle('buddy-left', !!position.left);
+  document.documentElement.classList.toggle('buddy-top', !!position.top);
   Object.assign(root.style, {
     right: `${at.right}px`,
     bottom: `${at.bottom}px`,
@@ -40,7 +44,7 @@ function layout(): void {
     // the buddy doesn't flash at the frame's corner.
     visibility: dragging && !expanded() ? 'hidden' : '',
   });
-  post(dragging ? { type: 'frame', full: true } : { type: 'frame', full: false, ...position, ...size });
+  post(dragging ? { type: 'frame', full: true } : { type: 'frame', full: false, right: position.right, bottom: position.bottom, ...size });
 }
 
 // Tell the content script where the visible UI is, so it can take the pointer over it.
@@ -55,13 +59,30 @@ setInterval(() => {
 }, 100);
 
 installApi(PORT_PAGE, {
-  resize: (width, height) => { size = { width, height }; layout(); },
+  resize: (width, height) => {
+    // Mirrored to the top, the box grows downward so the buddy stays put.
+    if (position.top) position = { ...position, bottom: position.bottom - (height - size.height) };
+    size = { width, height };
+    layout();
+  },
   setVisible: visible => post({ type: 'visible', visible }),
   setHitRects() {},
   setSettingsVisible() {},
   dragStart: () => { dragging = true; dragFrom = position; layout(); },
-  dragEnd: () => {
-    if (expanded()) position = clampToViewport(position);
+  dragEnd: anchor => {
+    if (expanded()) {
+      // On the left/top half of the page the layout is mirrored, so the buddy can reach
+      // that edge. When it flips, shift the box by however far the buddy moves inside it,
+      // so the buddy stays where it was dropped.
+      if (anchor) {
+        const left = anchor.left + anchor.width / 2 < window.innerWidth / 2;
+        const top = anchor.top + anchor.height / 2 < window.innerHeight / 2;
+        if (left !== !!position.left) position = { ...position, right: position.right - (anchor.left - anchor.mirroredLeft) };
+        if (top !== !!position.top) position = { ...position, bottom: position.bottom - (anchor.top - anchor.mirroredTop) };
+        position = { ...position, left, top };
+      }
+      position = clampToViewport(position);
+    }
     dragging = false;
     layout();
     void chrome.storage.local.set({ [KEY_POSITION]: position });
@@ -80,14 +101,19 @@ window.addEventListener('mousemove', e => {
       base = clampToViewport(dragFrom);
       offset = { x: window.innerWidth - base.right - size.width, y: window.innerHeight - base.bottom - size.height };
     }
-    position = { right: base.right - (e.clientX - offset.x - pressedAt.x), bottom: base.bottom - (e.clientY - offset.y - pressedAt.y) };
+    position = { ...base, right: base.right - (e.clientX - offset.x - pressedAt.x), bottom: base.bottom - (e.clientY - offset.y - pressedAt.y) };
     if (expanded()) layout();
     return;
   }
   // Hand the pointer back to the page once it leaves the UI.
   if (!e.buttons && !(e.target as Element).closest?.(UI_SELECTOR)) post({ type: 'interactive', value: false });
 }, true);
-window.addEventListener('resize', () => { if (dragging) layout(); });
+window.addEventListener('resize', () => {
+  if (!dragging) return;
+  // The frame just grew to the viewport; a saved position may lie outside it.
+  position = clampToViewport(position);
+  layout();
+});
 
 // Other tabs share the position, so a drag in one tab moves the buddy everywhere.
 void chrome.storage.local.get(KEY_POSITION).then(stored => { position = stored[KEY_POSITION] ?? DEFAULT_POSITION; layout(); });

@@ -1,4 +1,4 @@
-import type { AppSettings, StateMachineData } from '../../src/utils/types';
+import type { AppSettings, BuddyAnchor, StateMachineData } from '../../src/utils/types';
 import { call, type Push, type Rect, type SchedulerAction } from './protocol';
 
 // Where the app is shown: an overlay frame inside a tab, or the toolbar popup.
@@ -8,7 +8,7 @@ export interface Host {
   setHitRects(rects: Rect[]): void;
   setSettingsVisible(visible: boolean): void;
   dragStart(): void;
-  dragEnd(): void;
+  dragEnd(anchor?: BuddyAnchor | null): void;
   quit(): void;
 }
 
@@ -93,7 +93,7 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     dismissHydration: () => act('dismissHydration'),
     dragStart: () => host.dragStart(),
     dragMove() {},
-    dragEnd: () => host.dragEnd(),
+    dragEnd: anchor => host.dragEnd(anchor),
     selectMedia: async () => { desktopOnly(); return null; },
     getPathForFile: () => { desktopOnly(); return ''; },
     saveCustomMedia: async () => null,

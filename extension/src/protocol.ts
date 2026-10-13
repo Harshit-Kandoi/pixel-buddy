@@ -26,7 +26,7 @@ export type FrameMessage =
   | { type: 'interactive'; value: boolean };
 
 export interface Rect { x: number; y: number; width: number; height: number }
-export interface Position { right: number; bottom: number }
+export interface Position { right: number; bottom: number; left?: boolean; top?: boolean }
 
 export const PORT_PAGE = 'page';
 export const PORT_POPUP = 'popup';

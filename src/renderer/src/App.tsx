@@ -4,7 +4,7 @@ import { SpeechBubble } from './components/SpeechBubble';
 import { Timer } from './components/Timer';
 import { Settings } from './components/Settings';
 import { WidgetPanel } from './components/WidgetPanel';
-import { AppSettings, StateMachineData } from '../../utils/types';
+import { AppSettings, BuddyAnchor, StateMachineData } from '../../utils/types';
 import { getRandomTip, getRandomBuddyLine } from '../../utils/quotes';
 import { playChime, playWorriedBeep } from '../../utils/sounds';
 import { toMediaUrl } from '../../utils/mediaUrl';
@@ -12,6 +12,26 @@ import { toMediaUrl } from '../../utils/mediaUrl';
 const COMPANION_WIDTH = 400;
 const COMPANION_HEIGHT = 350;
 const HIT_SELECTOR = '.buddy-container, .speech-bubble, .widget-panel, .side-controls, .settings-trigger, .display-close';
+
+// Measures the buddy, and where it would sit with the layout mirrored. The mirrored layout
+// is symmetric (see html.buddy-left / html.buddy-top in index.css): the buddy row reflects
+// within the container, and the buddy reflects within the row horizontally but keeps its
+// bottom alignment in it. Computed rather than measured, since toggling the classes would
+// restart the bubble and widget animations.
+function measureBuddy(): BuddyAnchor | null {
+  const container = document.querySelector('.app-container')?.getBoundingClientRect();
+  const row = document.querySelector('.buddy-row')?.getBoundingClientRect();
+  const buddy = document.querySelector('.buddy-container')?.getBoundingClientRect();
+  if (!container || !row || !buddy) return null;
+  return {
+    left: buddy.left,
+    top: buddy.top,
+    width: buddy.width,
+    height: buddy.height,
+    mirroredLeft: container.left + container.right - buddy.right,
+    mirroredTop: container.top + container.bottom - row.bottom + (buddy.top - row.top),
+  };
+}
 
 // The Chrome extension mounts one App per tab, so it starts with settings closed.
 function App({ initialShowSettings = true }: { initialShowSettings?: boolean }): React.JSX.Element {
@@ -253,7 +273,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('blur', handleBlur);
       if (isDragging.current) {
-        window.api.dragEnd(); // main process stops polling, saves position, re-enables click-through
+        window.api.dragEnd(measureBuddy()); // host stops the drag, picks a side, saves position, re-enables click-through
       } else if (allowClick) {
         handleBuddyClick();
       }

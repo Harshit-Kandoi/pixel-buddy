@@ -15,6 +15,8 @@ export interface AppSettings {
   keyingMode: 'auto' | 'native' | 'none';
   windowX: number | null;
   windowY: number | null;
+  buddyOnLeft: boolean;
+  buddyOnTop: boolean;
   debugKeyer: boolean;
   userName: string | null;
   mediaLibrary: string[];
@@ -28,6 +30,18 @@ export interface AppSettings {
   statsBreaksCompletedToday: number;
   statsBreaksSkippedToday: number;
   statsBreaksSnoozedToday: number;
+}
+
+// Where the buddy sits in its window (window coordinates) at the end of a drag, now and
+// with the layout mirrored on each axis, so the host can flip the layout toward the nearer
+// screen edges without the buddy moving on screen.
+export interface BuddyAnchor {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  mirroredLeft: number;
+  mirroredTop: number;
 }
 
 export interface StateMachineData {

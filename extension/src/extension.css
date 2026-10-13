@@ -1,5 +1,5 @@
 /* Extension-only additions on top of the desktop renderer styles. */
-:root { color-scheme: normal; }
+:root { color-scheme: light; } /* must match the frame element's scheme in content.ts */
 
 #ext-notice {
   position: fixed;

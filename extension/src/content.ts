@@ -35,7 +35,9 @@ function render(): void {
     padding: '0',
     background: 'transparent',
     // Must match the frame's own scheme, or Chrome paints an opaque backdrop behind it.
-    'color-scheme': 'normal',
+    // Explicitly `light` on both sides: `normal` still gets the white backdrop on pages
+    // that prefer a dark scheme (e.g. Google in dark mode).
+    'color-scheme': 'light',
     'z-index': '2147483647',
     display: visible ? 'block' : 'none',
     'pointer-events': interactive ? 'auto' : 'none',
