@@ -1,6 +1,6 @@
 {
   "name": "pixel-buddy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A free desktop companion with gentle break and hydration reminders.",
   "main": "./out/main/index.js",
   "author": "Harshit Kandoi",
