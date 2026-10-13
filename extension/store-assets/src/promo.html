@@ -1,0 +1,58 @@
+<!doctype html>
+<!-- Store promo tiles. Rendered at 440x280 (?size=small) and 1400x560 (?size=marquee). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pixel Buddy promo</title>
+<style>
+  :root { --paper: #f5f4eb; --ink: #213e31; --green: #28593e; --muted: #657468; --peach: #f2bb9c; --soft: #e4ebd6; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); background: var(--paper); overflow: hidden; }
+  .tile { position: relative; overflow: hidden; display: flex; align-items: center;
+    background-color: var(--soft); background-image: radial-gradient(#a3b88c55 1px, transparent 1px); }
+  .copy { position: relative; z-index: 1; }
+  .name { font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+  .name span { color: #a2bb7a; }
+  .tag { margin: 0; line-height: 1.25; }
+  .tag em { font-family: Georgia, serif; font-weight: 400; color: #608250; }
+  .chips { display: flex; flex-wrap: wrap; }
+  .chip { background: #fafaf2; border: 1px solid #cbd7bd; border-radius: 999px; color: var(--muted); }
+  .buddy { position: absolute; }
+  .bubble { position: absolute; background: #fffdf1; border: 1px solid #d3dbc4; border-radius: 14px; line-height: 1.35; transform: rotate(2deg); }
+  .bubble span { color: #bc7c55; }
+
+  /* 440 x 280 */
+  .small { width: 440px; height: 280px; padding: 0 0 0 30px; background-size: 12px 12px; }
+  .small .name { font-size: 34px; }
+  .small .tag { font-size: 17px; margin-top: 12px; max-width: 200px; }
+  .small .buddy { width: 150px; right: 18px; bottom: 34px; }
+  .small .bubble { right: 108px; top: 34px; font-size: 12px; padding: 8px 12px; }
+
+  /* 1400 x 560 */
+  .marquee { width: 1400px; height: 560px; padding: 0 0 0 110px; background-size: 18px 18px; }
+  .marquee .name { font-size: 96px; }
+  .marquee .tag { font-size: 40px; margin-top: 22px; max-width: 640px; }
+  .marquee .chips { gap: 12px; margin-top: 34px; }
+  .marquee .chip { font-size: 19px; padding: 9px 18px; }
+  .marquee .buddy { width: 330px; right: 170px; bottom: 60px; }
+  .marquee .bubble { right: 420px; top: 92px; font-size: 22px; padding: 16px 22px; }
+</style>
+</head>
+<body>
+  <div class="tile" id="tile">
+    <div class="copy">
+      <div class="name">pixel buddy<span>.</span></div>
+      <p class="tag">Gentle <em>break</em> &amp; <em>water</em> reminders in every tab.</p>
+      <div class="chips" id="chips"><span class="chip">Break timer</span><span class="chip">Hydration</span><span class="chip">Private, no tracking</span></div>
+    </div>
+    <div class="bubble">Time to stretch! <span>✦</span></div>
+    <img class="buddy" src="buddy.svg" alt="">
+  </div>
+  <script>
+    const size = new URLSearchParams(location.search).get('size') || 'small';
+    document.getElementById('tile').classList.add(size);
+    if (size === 'small') document.getElementById('chips').remove();
+  </script>
+</body>
+</html>

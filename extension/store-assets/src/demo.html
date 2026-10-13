@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- Neutral, invented page the store screenshots show the buddy on. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Weekly plan</title>
+<style>
+  :root { --paper: #f5f4eb; --ink: #213e31; --muted: #657468; --line: #d7ddd0; --soft: #e8ecdf; --green: #28593e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.6 Arial, Helvetica, sans-serif; }
+  .top { height: 58px; display: flex; align-items: center; gap: 14px; padding: 0 32px; border-bottom: 1px solid var(--line); background: #eef0e4; }
+  .dot { width: 26px; height: 26px; border-radius: 7px; background: var(--green); }
+  .top b { font-size: 16px; }
+  .top span { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 58px); }
+  aside { border-right: 1px solid var(--line); padding: 26px 20px; font-size: 13px; color: var(--muted); }
+  aside p { margin: 0 0 12px; }
+  aside .on { color: var(--ink); font-weight: 700; }
+  main { padding: 40px 56px; max-width: 760px; }
+  .eyebrow { font-size: 11px; letter-spacing: 1.6px; color: #80945e; font-weight: 700; }
+  h1 { font-size: 40px; letter-spacing: -1.6px; line-height: 1.1; margin: 10px 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  h2 { font-size: 18px; margin: 28px 0 12px; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { display: flex; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+  li i { width: 17px; height: 17px; border-radius: 5px; border: 2px solid #9fb48a; flex-shrink: 0; }
+  li.done i { background: #9fb48a; }
+  li.done span { color: var(--muted); text-decoration: line-through; }
+  .note { margin-top: 28px; background: var(--soft); border: 1px solid #d4ddc6; border-radius: 12px; padding: 18px 20px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+  <div class="top"><div class="dot"></div><b>Notebook</b><span>Saved just now</span></div>
+  <div class="layout">
+    <aside><p class="on">Weekly plan</p><p>Reading list</p><p>Meeting notes</p><p>Ideas</p></aside>
+    <main>
+      <div class="eyebrow">THIS WEEK</div>
+      <h1>Weekly plan</h1>
+      <p class="sub">Three focused blocks a day, with real breaks in between.</p>
+      <h2>Today</h2>
+      <ul>
+        <li class="done"><i></i><span>Review the project brief</span></li>
+        <li class="done"><i></i><span>Sketch the onboarding flow</span></li>
+        <li><i></i><span>Write the first draft of the update</span></li>
+        <li><i></i><span>Reply to feedback</span></li>
+        <li><i></i><span>Plan tomorrow</span></li>
+      </ul>
+      <div class="note">Tip: stand up, stretch, and look at something far away between focus blocks.</div>
+    </main>
+  </div>
+</body>
+</html>

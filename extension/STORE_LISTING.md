@@ -31,12 +31,15 @@ Private by design: no account, no analytics, no tracking. Your settings stay in 
 Free and open source (MIT). A desktop app for Windows, macOS, and Linux is also available.
 ```
 
-**Graphics** (PNG or JPEG):
-- Store icon, 128×128: `extension/public/icons/icon-128.png`
-- Screenshots, 1280×800, 1 to 5: the buddy on a regular website, a break reminder bubble, the break timer, and the settings popup.
-- Small promo tile, 440×280: required.
+**Graphics** (PNG, ready in `extension/store-assets/`):
+- Store icon, 128×128: `store-icon-128.png` (same as `extension/public/icons/icon-128.png`)
+- Screenshots, 1280×800, in this order: `screenshot-1-focus.png`, `screenshot-2-break-reminder.png`, `screenshot-3-break.png`, `screenshot-4-water.png`, `screenshot-5-settings.png`
+- Small promo tile, 440×280: `promo-small-440x280.png`
+- Marquee promo tile, 1400×560: `promo-marquee-1400x560.png`
 
-**Homepage URL:** your promotional website. **Support URL:** https://github.com/Harshit-Kandoi/pixel-buddy/issues
+The screenshots are the real extension on an invented demo page (`store-assets/src/demo.html`); the tiles are rendered from `store-assets/src/promo.html` (`?size=small` or `?size=marquee`).
+
+**Homepage URL:** https://harshit-kandoi.github.io/pixel-buddy/ **Support URL:** https://github.com/Harshit-Kandoi/pixel-buddy/issues
 
 ## Privacy practices
 
@@ -61,7 +64,7 @@ Pixel Buddy shows a small companion on web pages that reminds the user to take b
 
 **Data usage:** Check **none** of the data categories. Then certify all three statements: no selling of data, no use unrelated to the single purpose, and no use for creditworthiness or lending.
 
-**Privacy policy URL:** `<your website>/privacy.html`. The page is in `website/dist/privacy.html` and is published with the website.
+**Privacy policy URL:** https://harshit-kandoi.github.io/pixel-buddy/privacy.html (source: `website/dist/privacy.html`, published with the website).
 
 ## After approval
 
