@@ -23,6 +23,8 @@ export const DEFAULT_SETTINGS = {
   keyingMode: 'auto' as 'auto' | 'native' | 'none',
   windowX: null as number | null,
   windowY: null as number | null,
+  buddyOnLeft: false,
+  buddyOnTop: false,
   debugKeyer: false,
   userName: null as string | null,
   mediaLibrary: [] as string[],

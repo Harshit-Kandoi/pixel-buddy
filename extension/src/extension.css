@@ -1,0 +1,47 @@
+/* Extension-only additions on top of the desktop renderer styles. */
+:root { color-scheme: light; } /* must match the frame element's scheme in content.ts */
+
+#ext-notice {
+  position: fixed;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  z-index: 100;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+#ext-notice.show { opacity: 1; transform: none; }
+
+/* Tab overlay: the frame fills the viewport and the app sits at its saved corner offset. */
+html.overlay #root { position: fixed; }
+
+/* Toolbar popup: sized by the app's resize() calls instead of filling a window. */
+html.popup, html.popup body {
+  width: auto;
+  height: auto;
+  background: #0b1220 !important;
+}
+html.popup #root { width: 400px; height: 560px; }
+
+.popup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  font-size: 13px;
+  color: #cbd5e1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+.popup-bar input { accent-color: var(--theme-primary); width: 16px; height: 16px; cursor: pointer; }

@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { AppSettings, StateMachineData } from '../utils/types'
+import { AppSettings, BuddyAnchor, StateMachineData } from '../utils/types'
 
 declare global {
   interface Window {
@@ -29,7 +29,7 @@ declare global {
       dismissHydration(): void
       dragStart(): void
       dragMove(): void
-      dragEnd(): void
+      dragEnd(anchor?: BuddyAnchor | null): void
       selectMedia(): Promise<string | null>
       saveCustomMedia(filePath: string): Promise<string | null>
       resetMedia(): Promise<null>

@@ -35,6 +35,15 @@ async function loadRelease() {
 }
 loadRelease();
 
+// Paste the Chrome Web Store listing URL here once the extension is approved.
+const chromeStoreUrl = '';
+if (chromeStoreUrl) {
+  const chromeLink = document.querySelector('#chrome-link');
+  chromeLink.href = chromeStoreUrl;
+  chromeLink.textContent = 'Add to Chrome ↗';
+  document.querySelector('#chrome-note').textContent = 'Free on the Chrome Web Store';
+}
+
 const command = document.querySelector('#install-command');
 const platformSelect = document.querySelector('#terminal-platform');
 const copyStatus = document.querySelector('#copy-status');

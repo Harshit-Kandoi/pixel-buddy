@@ -69,6 +69,22 @@ npm run build:linux -- --publish never
 
 Artifacts are written to `release/`. Mac packaging produces both Apple silicon and Intel installers. Global input monitoring uses `uiohook-napi`, rebuilt for each target architecture.
 
+## Chrome extension
+
+Pixel Buddy can also live in your browser tabs. The extension runs the same timer logic and interface as the desktop app: one shared timer for every tab, with the buddy in the corner of each page.
+
+```bash
+npm run ext:build
+```
+
+Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, and select `out/extension`. Run the build again and select the reload button on the extension's card after changes.
+
+- Drag the buddy anywhere; its position is shared across tabs. Clicks pass through the empty space around it.
+- The toolbar icon shows minutes until your next break. Its popup opens settings and stats, plus a **Show on pages** switch. In the extension, **Quit Pixel Buddy** hides the buddy from pages until you switch it back on.
+- When no visible tab is showing the buddy, break and water reminders arrive as system notifications instead.
+- Smart monitoring uses Chrome's idle detection and your activity in browser tabs.
+- Custom buddies and alarm sounds are desktop-only for now. The extension uses the built-in robot and chime. Chrome can't show the buddy on its own pages, like `chrome://` pages and the Web Store.
+
 ## Promotional website
 
 The buildless, responsive website is in `website/dist/`. It includes an illustrated buddy, an interactive timer and water preview, real release downloads, a copyable Bash command, and installation FAQs. The preview is an illustration of the experience, not a connection to the desktop app.

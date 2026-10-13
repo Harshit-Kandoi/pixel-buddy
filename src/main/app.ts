@@ -19,6 +19,7 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'buddy-media', privileges: { standard: true, secure: true, supportFetchAPI: true } }
 ]);
 import { SettingsManager } from './settings';
+import type { BuddyAnchor } from '../utils/types';
 import { ActivityMonitor } from './activity';
 import { Scheduler } from './scheduler';
 import { TrayManager } from './tray';
@@ -94,6 +95,7 @@ function createWindow(): void {
     const pos = getBottomRightPosition(DEFAULT_WIDTH, DEFAULT_HEIGHT);
     x = pos.x;
     y = pos.y;
+    settingsManager.save({ buddyOnLeft: false, buddyOnTop: false });
   }
 
   const winOptions: Electron.BrowserWindowConstructorOptions = {
@@ -350,7 +352,7 @@ app.whenReady().then(() => {
   // drag-move is now a no-op — drag is handled by the interval above
   ipcMain.on('window:drag-move', () => { /* handled by main-process polling */ });
 
-  ipcMain.on('window:drag-end', (event) => {
+  ipcMain.on('window:drag-end', (event, anchor: unknown) => {
     if (dragPollInterval) {
       clearInterval(dragPollInterval);
       dragPollInterval = null;
@@ -363,17 +365,30 @@ app.whenReady().then(() => {
         resizeAnchored(win, pendingResize.width, pendingResize.height);
         pendingResize = null;
       }
-      const [wx, wy] = win.getPosition();
+      let [wx, wy] = win.getPosition();
       const bounds = win.getBounds();
       const currentDisplay = screen.getDisplayMatching(bounds);
       const { x: minX, y: minY, width: screenW, height: screenH } = currentDisplay.workArea;
+
+      // On the left/top half of the screen the layout is mirrored, so the buddy can reach
+      // that edge. When it flips, shift the window by however far the buddy moves inside
+      // it, so the buddy stays where it was dropped.
+      let { buddyOnLeft, buddyOnTop } = settingsManager.getSettings();
+      if (isBuddyAnchor(anchor)) {
+        const wantsLeft = wx + anchor.left + anchor.width / 2 < minX + screenW / 2;
+        const wantsTop = wy + anchor.top + anchor.height / 2 < minY + screenH / 2;
+        if (wantsLeft !== buddyOnLeft) wx += Math.round(anchor.left - anchor.mirroredLeft);
+        if (wantsTop !== buddyOnTop) wy += Math.round(anchor.top - anchor.mirroredTop);
+        buddyOnLeft = wantsLeft;
+        buddyOnTop = wantsTop;
+      }
 
       // Clamp coordinates to prevent dragging off-screen
       const clampedX = Math.max(minX, Math.min(wx, minX + screenW - bounds.width));
       const clampedY = Math.max(minY, Math.min(wy, minY + screenH - bounds.height));
 
       win.setPosition(clampedX, clampedY);
-      settingsManager.save({ windowX: clampedX, windowY: clampedY });
+      settingsManager.save({ windowX: clampedX, windowY: clampedY, buddyOnLeft, buddyOnTop });
       win.webContents.send('settings:updated', settingsManager.getSettings());
       // Force-reapply click-through (drop the cache) so the hit-test poll starts from a known state
       lastIgnoreState = null;
@@ -513,8 +528,8 @@ app.whenReady().then(() => {
     return null;
   });
 
-  // The buddy is laid out in the window's bottom-right corner, so resizes keep that
-  // corner fixed on screen — the buddy stays put while bubbles/panels grow around it.
+  // The buddy is laid out in the window's bottom edge (top when mirrored), so resizes keep
+  // that edge fixed on screen — the buddy stays put while bubbles/panels grow around it.
   ipcMain.on('window:resize', (event, width, height) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
@@ -571,12 +586,18 @@ app.on('will-quit', () => {
   trayManager?.destroy();
 });
 
+function isBuddyAnchor(value: unknown): value is BuddyAnchor {
+  const a = value as BuddyAnchor | null;
+  return !!a && [a.left, a.top, a.width, a.height, a.mirroredLeft, a.mirroredTop].every(Number.isFinite);
+}
+
 function resizeAnchored(win: BrowserWindow, width: number, height: number): void {
   const bounds = win.getBounds();
   if (bounds.width === width && bounds.height === height) return;
   const { x: minX, y: minY, width: screenW, height: screenH } = screen.getDisplayMatching(bounds).workArea;
   const newX = Math.max(minX, Math.min(bounds.x + bounds.width - width, minX + screenW - width));
-  const newY = Math.max(minY, Math.min(bounds.y + bounds.height - height, minY + screenH - height));
+  const anchoredY = settingsManager.getSettings().buddyOnTop ? bounds.y : bounds.y + bounds.height - height;
+  const newY = Math.max(minY, Math.min(anchoredY, minY + screenH - height));
   win.setBounds({ x: newX, y: newY, width, height });
 }
 
