@@ -46,7 +46,26 @@ jobs:
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
         run: |
-          node -e "const p = require('./package.json'); const l = require('./package-lock.json'); if (p.version !== l.version || p.version !== l.packages[''].version) throw Error('Package/lock version mismatch'); if (process.env.GITHUB_REF_TYPE === 'tag' && 'v' + p.version !== process.env.GITHUB_REF_NAME) throw Error('Tag must match package version'); if (process.arch !== process.env.EXPECTED_ARCH) throw Error('Runner architecture mismatch');"
+          node <<'NODE'
+          const p = require('./package.json');
+          const l = require('./package-lock.json');
+          const ref = process.env.GITHUB_REF_NAME;
+          const rootVersion = l.packages?.['']?.version;
+          console.log(`Ref: ${ref}; package: ${p.version}; lockfile: ${l.version}; lockfile root: ${rootVersion}; runner: ${process.arch}`);
+          function fail(message) {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          }
+          if (p.version !== l.version || p.version !== rootVersion) {
+            fail(`Package version ${p.version} does not match lockfile versions ${l.version}/${rootVersion}. Update and commit both package files before tagging.`);
+          }
+          if (process.env.GITHUB_REF_TYPE === 'tag' && `v${p.version}` !== ref) {
+            fail(`Tag ${ref} points to package version ${p.version}; expected v${p.version}. Commit the version update before creating a new release tag. Re-running this tag uses the same mismatched commit.`);
+          }
+          if (process.arch !== process.env.EXPECTED_ARCH) {
+            fail(`Runner architecture ${process.arch} does not match target ${process.env.EXPECTED_ARCH}.`);
+          }
+          NODE
       # uiohook-napi is rebuilt for Electron on install and needs the X11 headers on Linux
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'

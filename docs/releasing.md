@@ -10,24 +10,33 @@ Run `npm ci`, `npm test`, and `npm run build` first. Desktop tests cover reset, 
 
 Keep the repository **public**: GitHub's standard hosted runners are free for public repositories. The release workflow skips private repositories to avoid billable usage. It uses no larger runners, paid signing services, Apple membership, or custom secrets. Intermediate artifacts expire after three days; published GitHub release assets remain available. See [GitHub runner billing](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-## 2. Build the first release
+## 2. Build a release
 
-Keep the version in `package.json` and `package-lock.json` synchronized. The tag must equal `v` followed by that version; the workflow validates both files and the tag. For the current `1.0.1` version, after your changes are merged:
+Keep the version in `package.json` and `package-lock.json` synchronized. The tag must equal `v` followed by the version **in the tagged commit**; the workflow validates both files and the tag. Changing only the tag name does not update the application's version.
+
+For each new release, choose an unused version and update both files before committing. For example:
 
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+npm version 1.0.4 --no-git-tag-version
 ```
 
-If that tag already exists, increment the package version before tagging a new release. Do not replace a published tag.
+If the files already contain that version, skip this command. Review, commit, and push the version files together with all release fixes. Run the workflow manually against `main` and check all four build jobs before creating the tag. From the same tested commit, derive the tag from the package version:
+
+```bash
+release_tag="v$(node -p "require('./package.json').version")"
+git tag "$release_tag"
+git push origin "$release_tag"
+```
+
+If that tag already exists, choose an unused version and repeat the version update and commit steps. Do not force-push existing tags. Re-running a failed tag uses its original commit; it does not pick up fixes pushed to `main`.
 
 The `Build desktop release` workflow builds:
 
-- `pixel-buddy-1.0.1-windows-x64.exe`
-- `pixel-buddy-1.0.1-mac-arm64.dmg`
-- `pixel-buddy-1.0.1-mac-x64.dmg`
-- `pixel-buddy-1.0.1-linux-x86_64.AppImage`
-- `pixel-buddy-1.0.1-linux-amd64.deb`
+- `pixel-buddy-<version>-windows-x64.exe`
+- `pixel-buddy-<version>-mac-arm64.dmg`
+- `pixel-buddy-<version>-mac-x64.dmg`
+- `pixel-buddy-<version>-linux-x86_64.AppImage`
+- `pixel-buddy-<version>-linux-amd64.deb`
 - `SHA256SUMS`
 
 The release job starts only after all build jobs pass. It verifies each platform's checksums, requires all five current-version installers, and creates a draft with a combined `SHA256SUMS`. A manual run (**Actions → Build desktop release → Run workflow**) builds downloadable artifacts with per-platform checksums without creating a release, even when run against a tag. Start with a manual run before tagging.
