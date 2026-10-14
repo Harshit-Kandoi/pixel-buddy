@@ -397,9 +397,9 @@ app.whenReady().then(() => {
     }
   });
 
-  // App quit - exit immediately
+  // Use the normal quit lifecycle so will-quit stops native hooks and timers.
   ipcMain.on('app:quit', () => {
-    app.exit(0);
+    app.quit();
   });
 
   // Custom Media Selection via standalone file chooser

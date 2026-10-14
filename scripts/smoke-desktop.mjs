@@ -43,7 +43,9 @@ const deadline = Date.now() + 60_000;
 function alive() {
   if (launchError) throw launchError;
   if (child.exitCode !== null || child.signalCode !== null)
-    throw new Error("App exited before smoke check completed");
+    throw new Error(
+      `App exited before smoke check completed (exit code: ${child.exitCode}, signal: ${child.signalCode})`,
+    );
   if (Date.now() > deadline)
     throw new Error("Timed out waiting for the installed app");
 }
@@ -131,21 +133,30 @@ try {
   await delay(2000);
   alive();
   const exited = once(child, "exit");
-  // Quit can close the debugging connection before a reply; observe process exit instead.
-  socket.send(
-    JSON.stringify({
-      id: ++sequence,
-      method: "Runtime.evaluate",
-      params: { expression: "window.api.quit()" },
-    }),
-  );
-  const [code] = await Promise.race([
+  console.log("Startup checks passed; requesting quit through the app UI API.");
+  // Surface CDP/renderer errors, but allow exit to happen before a CDP reply.
+  const quitRequested = command("Runtime.evaluate", {
+    expression: "window.api.quit()",
+  }).then((result) => {
+    if (result.exceptionDetails) {
+      throw new Error(
+        `Quit request failed: ${JSON.stringify(result.exceptionDetails)}`,
+      );
+    }
+    console.log(
+      "Renderer dispatched the quit request; waiting for process exit.",
+    );
+    return exited;
+  });
+  const [code, signal] = await Promise.race([
     exited,
+    quitRequested,
     delay(10_000, undefined, { ref: false }).then(() => {
       throw new Error("App did not quit cleanly");
     }),
   ]);
-  if (code !== 0) throw new Error(`App exited with code ${code}`);
+  if (code !== 0)
+    throw new Error(`App exited with code ${code}, signal ${signal}`);
   console.log(
     "PASS: installed app rendered, preload/IPC responded, native module loaded, and quit cleanly.",
   );
