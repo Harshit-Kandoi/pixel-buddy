@@ -1,0 +1,6 @@
+[build]
+  command = "node scripts/check-website.mjs"
+  publish = "website/dist"
+
+[build.environment]
+  NPM_FLAGS = "--ignore-scripts"

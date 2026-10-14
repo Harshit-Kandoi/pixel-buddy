@@ -95,6 +95,12 @@ npm run site:dev
 
 Open `http://localhost:4173`. No website dependencies or build step are needed. The page queries GitHub's public releases API; if GitHub is unavailable or rate-limited, it offers a Releases link instead.
 
+### Deploy to Netlify
+
+The root `netlify.toml` deploys only `website/dist/` and runs `node scripts/check-website.mjs` to validate its assets and links. It overrides the desktop build command and publish directory configured in the Netlify dashboard.
+
+Netlify installs npm dependencies with `--ignore-scripts`, skipping the Electron postinstall rebuild and native dependency install scripts. This website does not need those packages. Desktop dependencies remain in `dependencies` so electron-builder can include them in installers; local development and desktop release workflows keep their normal install and build behavior. Do not use `npm run build` for this static website: that command builds the Electron app.
+
 ## Share the freebie
 
 See [the release guide](docs/releasing.md) for the exact build, GitHub release, and hosting steps. `.github/workflows/release.yml` builds Windows, both Mac architectures, and Linux, then creates a **draft** release with checksums. Publish the draft when you've checked the installers. `.github/workflows/website.yml` deploys the promotional site to GitHub Pages once Pages is enabled for GitHub Actions.
