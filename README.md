@@ -26,7 +26,7 @@ bash pixel-buddy-download.sh
 
 The script requires Bash, curl, and Python 3.8+. It detects your desktop, downloads the installer, and checks it against the release's `SHA256SUMS`. It never runs the installer or replaces an existing file. Use `--platform windows|mac-arm64|mac-x64|linux|linux-deb` or `--output DIRECTORY` to choose a different target.
 
-These builds are unsigned. Your operating system may ask you to confirm opening the app. On macOS, use Privacy & Security to allow your downloaded copy if prompted. On Linux, give the AppImage execute permission before opening it. Only use this project's official releases.
+These builds have no trusted publisher signature or Apple notarization. macOS Gatekeeper and Windows SmartScreen may warn or block them; checksums do not remove those warnings. Keep operating-system security protections enabled. See [security limitations](docs/code_signing.md) and [checksum verification](docs/releasing.md#verify-a-download). On Linux, give the AppImage execute permission before opening it. Only use this project's official releases.
 
 ## Make yourself at home
 
@@ -103,6 +103,6 @@ Netlify installs npm dependencies with `--ignore-scripts`, skipping the Electron
 
 ## Share the freebie
 
-See [the release guide](docs/releasing.md) for the exact build, GitHub release, and hosting steps. `.github/workflows/release.yml` builds Windows, both Mac architectures, and Linux, then creates a **draft** release with checksums. Publish the draft when you've checked the installers. `.github/workflows/website.yml` deploys the promotional site to GitHub Pages once Pages is enabled for GitHub Actions.
+See [the release guide](docs/releasing.md) for the exact build, GitHub release, and hosting steps. `.github/workflows/release.yml` uses free standard runners in public repositories to build Windows, both Mac architectures, and Linux. Windows and Mac installer startup checks must pass before it creates a **draft** release with checksums. Manual runs provide artifacts and checksums without creating a release. Publish the draft after checking the installers on real desktops. `.github/workflows/website.yml` deploys the promotional site to GitHub Pages once Pages is enabled for GitHub Actions.
 
 Built with Electron, React, TypeScript, and electron-builder. Licensed under [MIT](LICENSE).

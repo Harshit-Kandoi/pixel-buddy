@@ -1,29 +1,52 @@
 name: Build desktop release
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
+    # Standard hosted runners are free for public repositories. Avoid private-repo charges.
+    if: github.event.repository.private == false
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2022
             command: build:win
-          - os: macos-latest
+            arch: x64
+            installer: windows-x64.exe
+          - os: macos-15
             command: build:mac
+            arch: arm64
+            installer: mac-arm64.dmg
+          - os: macos-15-intel
+            command: build:mac
+            arch: x64
+            installer: mac-x64.dmg
           - os: ubuntu-22.04
             command: build:linux
+            arch: x64
     runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Check release version and runner architecture
+        shell: bash
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          node -e "const p = require('./package.json'); const l = require('./package-lock.json'); if (p.version !== l.version || p.version !== l.packages[''].version) throw Error('Package/lock version mismatch'); if (process.env.GITHUB_REF_TYPE === 'tag' && 'v' + p.version !== process.env.GITHUB_REF_NAME) throw Error('Tag must match package version'); if (process.arch !== process.env.EXPECTED_ARCH) throw Error('Runner architecture mismatch');"
       # uiohook-napi is rebuilt for Electron on install and needs the X11 headers on Linux
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
@@ -31,40 +54,84 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxrandr-dev libxtst-dev libxt-dev libxinerama-dev libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev libxkbfile-dev
       - run: npm ci
-      - name: Check release version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: node -e "if ('v' + require('./package.json').version !== process.env.GITHUB_REF_NAME) process.exit(1)"
       - run: npm test
-      - run: npm run ${{ matrix.command }} -- --publish never
+      - run: npm run ${{ matrix.command }} -- --${{ matrix.arch }} --publish never
+      - name: Install DMG and check app launch
+        if: runner.os == 'macOS'
+        shell: bash
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          INSTALLER_SUFFIX: ${{ matrix.installer }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          dmg="release/pixel-buddy-${version}-${INSTALLER_SUFFIX}"
+          hdiutil verify "$dmg"
+          mount="$RUNNER_TEMP/pixel-buddy-mount"
+          destination="$RUNNER_TEMP/pixel-buddy-installed"
+          mkdir -p "$mount" "$destination"
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
+          trap 'hdiutil detach "$mount"' EXIT
+          ditto "$mount/Pixel Buddy.app" "$destination/Pixel Buddy.app"
+          node scripts/smoke-desktop.mjs "$destination/Pixel Buddy.app/Contents/MacOS/Pixel Buddy"
+      - name: Install NSIS EXE and check app launch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $installer = (Resolve-Path "release/pixel-buddy-$version-windows-x64.exe").Path
+          $destination = Join-Path $env:RUNNER_TEMP 'pixel-buddy-installed'
+          $install = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$destination") -PassThru
+          if (-not $install.WaitForExit(120000)) { $install.Kill(); throw 'Installer timed out' }
+          if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+          $exe = Join-Path $destination 'pixel-buddy.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed executable is missing' }
+          node scripts/smoke-desktop.mjs "$exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed app smoke test failed' }
+      - name: Generate platform checksums
+        run: npm run release:checksums
       - uses: actions/upload-artifact@v4
         with:
-          name: pixel-buddy-${{ matrix.os }}
+          name: pixel-buddy-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             release/*.exe
             release/*.dmg
             release/*.AppImage
             release/*.deb
+            release/SHA256SUMS
           if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
   draft-release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v4
         with:
-          path: installers
-          merge-multiple: true
-      - name: Generate checksums
-        working-directory: installers
-        run: sha256sum pixel-buddy-* > SHA256SUMS
+          pattern: pixel-buddy-*
+          path: artifacts
+      - name: Verify artifacts and assemble complete release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir installers
+          for directory in artifacts/pixel-buddy-*; do
+            (cd "$directory" && sha256sum --check SHA256SUMS)
+            find "$directory" -maxdepth 1 -type f ! -name SHA256SUMS -exec cp -n {} installers/ \;
+          done
+          node scripts/release-checksums.mjs installers --all
+          (cd installers && sha256sum --check SHA256SUMS)
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" installers/* --verify-tag --draft --title "Pixel Buddy $RELEASE_TAG" --notes "Free desktop companion for Windows, macOS, and Linux. Download the installer for your device. SHA256SUMS contains file checksums. These desktop builds are unsigned; your operating system may request confirmation before opening them."
+          gh release create "$RELEASE_TAG" installers/* --verify-tag --draft --title "Pixel Buddy $RELEASE_TAG" --notes-file docs/release-notes.md

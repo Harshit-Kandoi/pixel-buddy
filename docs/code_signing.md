@@ -1,91 +1,32 @@
-# OS Code Signing & Notarization Guide
+# Free releases and operating-system security
 
-This document describes how to configure and execute signed and notarized production builds for macOS and Windows using **electron-builder**.
+Pixel Buddy's release workflow uses no signing certificates, Apple Developer membership, paid signing service, or signing secrets. The only release credential is GitHub's automatic, short-lived `GITHUB_TOKEN`.
 
----
+## macOS
 
-## 🍎 macOS Signing & Notarization
+`electron-builder.yml` explicitly sets `mac.identity: null` and `mac.notarize: false`. This preserves the unsigned release channel and avoids accidentally using a developer certificate installed on a maintainer's Mac. The existing entitlements file is retained for compatibility; it is not a substitute for a trusted signature.
 
-macOS requires apps to be code-signed with a valid **Developer ID Application** certificate and **Notarized** by Apple's notary service to prevent the "App is from an unidentified developer" Gatekeeper alert on startup.
+Apple may display “Apple could not verify” / “developer cannot be verified” warnings or block a downloaded application. A successful build or local startup test does not establish Gatekeeper approval. Removing these warnings for normal internet distribution requires a trusted Developer ID signature and Apple notarization, which are outside this zero-cost process. An ad-hoc signature would not establish publisher identity or replace notarization.
 
-### 1. Requirements
-- An active Apple Developer Account ($99/year).
-- macOS device with Xcode installed.
-- A **Developer ID Application** Certificate (downloaded from Apple Developer Portal and imported into Keychain Access).
+Do not remove quarantine attributes, disable Gatekeeper, turn off SIP, or re-sign downloaded copies as an installation workaround. If macOS blocks an installer, leave its protections enabled. An actual malware or damaged-app alert should be investigated, not dismissed as routine unsigned-app behavior.
 
-### 2. Required Environment Variables
-For CI/CD or local release builds, configure the following variables in your environment or a secure `.env` file (ensure it is gitignored!):
+Optional Accessibility permission for smart monitoring is separate from signing. Granting it does not make the app trusted or notarized. Basic idle detection is available without that permission.
 
-```bash
-# Keychain certificate password (usually only needed in headless environments)
-# CSC_LINK: Base64 representation of your certificate (.p12) or Keychain path
-# CSC_KEY_PASSWORD: password to decrypt the certificate (.p12) file
+## Windows
 
-# Apple ID notarization credentials:
-APPLE_ID="your-apple-id@email.com"
-APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-APPLE_TEAM_ID="ABC123XYZ4"
-```
+The existing x64 NSIS EXE retains its icon, version metadata, and per-user installation behavior. CI disables certificate auto-discovery and provides no signing credentials. Keep electron-builder's default executable resource editing enabled; disabling `signAndEditExecutable` would also remove branding/version edits.
 
-### 3. Configuring `electron-builder.yml`
-Ensure your configuration implements the hardened runtime and includes the notarize payload:
+Unsigned downloads can show **Unknown publisher**, **Windows protected your PC**, or other Microsoft Defender SmartScreen warnings. Smart App Control or an organization's policy may block execution. These cannot be reliably eliminated by packaging changes or checksums. A trusted Authenticode signature establishes publisher identity, but even a newly signed app can still receive SmartScreen reputation warnings.
 
-```yaml
-mac:
-  category: public.app-category.utilities
-  target:
-    - dmg
-    - zip
-  hardenedRuntime: true
-  gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
-  # Notarization configuration (electron-builder automatically notarizes if variables are present)
-  notarize:
-    teamId: "ABC123XYZ4"
-```
+Do not disable Defender, SmartScreen, Smart App Control, or organizational policies. This workflow neither changes those protections nor promises that unsigned installers can run under every policy.
 
----
+## What checksums prove
 
-## 🪟 Windows Code Signing
+`SHA256SUMS` detects a damaged or altered download relative to the published manifest. It does not prove the publisher's identity, establish that an app is malware-free, or protect against an attacker who replaces both installer and manifest. Get both files from this project's official GitHub release over HTTPS.
 
-Windows requires a code-signing certificate (typically an **Authenticode** certificate) to bypass the **Windows SmartScreen** filter.
+## References
 
-### 1. Requirements
-- An EV (Extended Validation) or Standard Code Signing Certificate from a trusted Certificate Authority (e.g. Sectigo, DigiCert).
-- Typically delivered as a `.pfx` or `.p12` file (or a hardware token/USB for EV certificates).
-
-### 2. Required Environment Variables
-Configure the following env vars in your build terminal:
-
-```bash
-# Path to your .pfx certificate file
-WIN_CSC_LINK="C:\\path\\to\\certificate.pfx"
-# Password for the .pfx file
-WIN_CSC_KEY_PASSWORD="your-certificate-password"
-```
-
-### 3. Configuring `electron-builder.yml`
-Configure the signing subject and signing algorithm:
-
-```yaml
-win:
-  target:
-    - nsis
-  publisherName: "Your Company/Developer Name"
-  # electron-builder will use signtool.exe automatically to sign the executable
-```
-
----
-
-## 🚀 Running the Release Build
-
-Once environment variables are set and Keychain/certificates are ready, run:
-
-```bash
-# Build & Package for macOS (on macOS)
-npm run build:mac
-
-# Build & Package for Windows
-npm run build:win
-```
+- [Apple: Safely open apps on your Mac](https://support.apple.com/en-us/102445)
+- [Microsoft: SmartScreen reputation for Windows app developers](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)
+- [electron-builder v26 macOS configuration](https://www.electron.build/v26/docs/mac/)
+- [GitHub-hosted runner availability and billing](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
