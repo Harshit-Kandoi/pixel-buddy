@@ -1600,3 +1600,47 @@ html.buddy-top .thinking-tail { bottom: auto; top: -20px; transform: scaleY(-1);
   from { opacity: 0; transform: translateY(-20px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* Guided break routines: step progress and the buddy acting out each step */
+.routine-steps { display: flex; justify-content: center; gap: 5px; margin-top: 10px; }
+.routine-steps span { width: 18px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); transition: background 0.3s; }
+.routine-steps span.done { background: rgba(16, 185, 129, 0.5); }
+.routine-steps span.active { background: #10b981; }
+
+.buddy-motion-reach { animation: motion-reach 3s ease-in-out infinite; transform-origin: 50% 100%; }
+.buddy-motion-sway { animation: motion-sway 3s ease-in-out infinite; transform-origin: 50% 100%; }
+.buddy-motion-look { animation: motion-look 4s ease-in-out infinite; }
+.buddy-motion-breathe { animation: motion-breathe 10s ease-in-out infinite; transform-origin: 50% 100%; }
+.buddy-motion-wiggle { animation: motion-wiggle 0.5s ease-in-out infinite; }
+@keyframes motion-reach { 0%, 100% { transform: none; } 50% { transform: translateY(-6px) scale(0.94, 1.12); } }
+@keyframes motion-sway { 0%, 100% { transform: none; } 25% { transform: translateX(-8px) skewX(6deg); } 75% { transform: translateX(8px) skewX(-6deg); } }
+@keyframes motion-look { 0%, 100% { transform: none; } 30% { transform: translateX(-12px); } 70% { transform: translateX(12px); } }
+/* 4 seconds in, 6 seconds out */
+@keyframes motion-breathe { 0%, 100% { transform: none; } 40% { transform: scale(1.1); } }
+@keyframes motion-wiggle { 0%, 100% { transform: none; } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .buddy-motion-reach, .buddy-motion-sway, .buddy-motion-look, .buddy-motion-breathe, .buddy-motion-wiggle { animation: none; }
+}
+
+/* Share my day */
+.share-day { display: flex; gap: 8px; margin-top: 12px; }
+.share-day .btn { display: flex; justify-content: center; align-items: center; gap: 6px; }
+.share-status { font-size: 11px; color: #94a3b8; margin-top: 6px; text-align: center; min-height: 15px; }
+
+/* Festival calendar under the avatar picker */
+.festival-calendar { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); }
+.festival-calendar-title { display: block; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px; }
+.festival-calendar-row { display: flex; justify-content: space-between; font-size: 12px; color: #e2e8f0; padding: 3px 0; }
+.festival-calendar-row span:last-child { color: #94a3b8; font-variant-numeric: tabular-nums; }
+
+/* Manual water logging on the dashboard */
+.water-log-buttons { display: flex; gap: 8px; margin-top: 10px; }
+.water-log-buttons .btn:first-child { flex: 0 0 40px; font-size: 16px; line-height: 1; }
+.water-log-buttons .btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Limited-time festival buddies in the avatar picker */
+.media-card-limited { position: absolute; left: 50%; bottom: 5px; transform: translateX(-50%); padding: 2px 6px; border-radius: 6px; background: #c97954; color: #fffdf1; font-size: 8px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.media-card-locked { cursor: default; opacity: 0.85; }
+.media-card-locked .media-card-thumb { display: flex; align-items: center; justify-content: center; border: 1px dashed rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.03); }
+.media-card-lock { font-size: 22px; filter: grayscale(0.3); }
+.media-card-sub { font-size: 10px; color: #94a3b8; text-align: center; padding: 0 4px 6px; margin-top: -4px; }

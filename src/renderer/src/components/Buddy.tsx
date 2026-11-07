@@ -5,6 +5,8 @@ import { toMediaUrl } from '../../../utils/mediaUrl';
 interface BuddyProps {
   state: string;
   customVideoPath?: string | null;
+  /** Built-in avatar to show when there is no custom media. */
+  defaultSrc?: string;
   keyingMode?: 'auto' | 'native' | 'none';
   debugKeyer?: boolean;
   onMouseDown?: (e: React.MouseEvent) => void;
@@ -144,6 +146,7 @@ function sampleBg(video: HTMLVideoElement): [number, number, number] {
 export const Buddy: React.FC<BuddyProps> = ({
   state,
   customVideoPath = null,
+  defaultSrc = buddyMascot,
   keyingMode = 'auto',
   debugKeyer = false,
   onMouseDown,
@@ -158,7 +161,7 @@ export const Buddy: React.FC<BuddyProps> = ({
   const bgTickRef = useRef(0);
   const rafRef = useRef<number>(0);
 
-  const mediaSrc = customVideoPath ? toMediaUrl(customVideoPath) : buddyMascot;
+  const mediaSrc = customVideoPath ? toMediaUrl(customVideoPath) : defaultSrc;
   const isImage = !customVideoPath || /\.(gif|png|webp|apng)$/i.test(customVideoPath);
 
   // Animation class goes on the wrapper div, NOT the media element

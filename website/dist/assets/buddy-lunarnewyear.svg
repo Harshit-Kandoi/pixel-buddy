@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 250" fill="none">
+<style>
+.twinkle{animation:twinkle 2.4s ease-in-out infinite}.late{animation-delay:1.2s}
+.flame{animation:flicker .9s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
+.glow{animation:glow 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
+.bob{animation:bob 3s ease-in-out infinite}
+.fall{animation:fall 3s linear infinite}
+@keyframes twinkle{50%{opacity:.25}}
+@keyframes flicker{to{transform:scale(.9,1.08) rotate(3deg)}}
+@keyframes glow{50%{opacity:.15;transform:scale(.85)}}
+@keyframes bob{50%{transform:translate(-3px,4px) rotate(-3deg)}}.bob.late{animation-delay:-1.5s}
+@keyframes fall{0%{transform:translateY(-4px);opacity:0}20%{opacity:1}100%{transform:translateY(14px);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<ellipse cx="120" cy="226" rx="70" ry="12" fill="#3d0408" opacity=".12"/>
+<path d="M85 180v35h-28v-20h14v-21m84 6v35h28v-20h-14v-21" fill="#5e070d" stroke="#3d0408" stroke-width="6" stroke-linejoin="round"/>
+<path d="M47 112H27v57h22m144-57h20v57h-22" fill="#930f17" stroke="#3d0408" stroke-width="6"/>
+<path d="M58 62h124v17h18v96h-18v17H58v-17H40V79h18V62Z" fill="#b5121b" stroke="#3d0408" stroke-width="6" stroke-linejoin="round"/>
+<path d="M60 84h120v65H60z" fill="#fff4e0" stroke="#3d0408" stroke-width="6"/>
+<path d="M76 117c4-9 14-9 18 0m52 0c4-9 14-9 18 0" stroke="#3d0408" stroke-width="6" stroke-linecap="round"/>
+<path d="M106 126c4 9 24 9 28 0" stroke="#3d0408" stroke-width="6" stroke-linecap="round"/>
+<circle cx="73" cy="132" r="6" fill="#ff9b85" opacity=".75"/><circle cx="167" cy="132" r="6" fill="#ff9b85" opacity=".75"/>
+<path d="M44 166h152" stroke="#e8b23a" stroke-width="6"/>
+<path d="M120 170l10 10-10 10-10-10Z" fill="#e8b23a" stroke="#7a4a00" stroke-width="2"/>
+<path d="M120 61V50" stroke="#3d0408" stroke-width="5"/>
+<ellipse cx="120" cy="32" rx="20" ry="16" fill="#e5383b" stroke="#3d0408" stroke-width="4"/>
+<path d="M108 20v24M120 16v32M132 20v24" stroke="#e8b23a" stroke-width="2"/>
+<rect x="110" y="13" width="20" height="5" rx="2" fill="#e8b23a" stroke="#3d0408" stroke-width="2"/>
+<rect x="110" y="46" width="20" height="5" rx="2" fill="#e8b23a" stroke="#3d0408" stroke-width="2"/>
+<path d="M214 166V112" stroke="#3d0408" stroke-width="2"/>
+<rect x="208" y="118" width="8" height="12" rx="2" fill="#e5383b" stroke="#3d0408" stroke-width="2"/>
+<rect x="214" y="132" width="8" height="12" rx="2" fill="#e5383b" stroke="#3d0408" stroke-width="2"/>
+<rect x="208" y="146" width="8" height="12" rx="2" fill="#e5383b" stroke="#3d0408" stroke-width="2"/>
+<path class="twinkle" d="M220 96l2.8 5.2 5.2 2.8-5.2 2.8-2.8 5.2-2.8-5.2-5.2-2.8 5.2-2.8Z" fill="#ffd23f"/>
+<circle class="twinkle late" cx="26" cy="40" r="7" fill="#ffc2d1"/><circle class="twinkle" cx="38" cy="54" r="5" fill="#ffc2d1"/>
+<circle class="twinkle late" cx="18" cy="70" r="4" fill="#ffc2d1"/>
+</svg>

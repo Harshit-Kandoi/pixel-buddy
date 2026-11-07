@@ -56,7 +56,11 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
   };
   document.addEventListener('visibilitychange', () => {
     if (wanted()) connect();
-    else { port?.disconnect(); port = null; }
+    else {
+      // After the extension updates, open tabs keep a dead port that throws on disconnect.
+      try { port?.disconnect(); } catch { /* extension context invalidated */ }
+      port = null;
+    }
   });
   connect();
 

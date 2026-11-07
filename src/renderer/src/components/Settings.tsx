@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppSettings } from '../../../utils/types';
 import { toMediaUrl } from '../../../utils/mediaUrl';
-import buddyMascot from '../assets/buddy.svg';
+import { AVATAR_SKINS } from '../avatars';
+import { drawShareCard, downloadBlob } from '../shareCard';
+import { CLAIM_BREAKS, FESTIVALS, claimStatus, upcomingFestivals, resolveAvatarSkin, type AvatarSkin, type FestivalSkin } from '../../../utils/seasons';
 
 interface SettingsProps {
   settings: AppSettings;
@@ -103,10 +105,47 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleResetMedia = async () => {
-    await window.api.resetMedia();
+  const handleSelectSkin = (skin: AvatarSkin) => {
     setCustomVideoPath(null);
-    handleSave('customVideoPath', null);
+    onSave({ customVideoPath: null, avatarSkin: skin });
+  };
+
+  // Festival buddies are limited-time: you see the classic buddy, the ones you've claimed, and
+  // the current festival's (claim it with breaks); the rest stay a surprise.
+  const claimed: FestivalSkin[] = settings.claimedSkins ?? [];
+  const claim = claimStatus(settings);
+  const festival = claim?.festival ?? null;
+  const upcoming = upcomingFestivals(new Date(), 3);
+  const shortDate = (d: Date): string => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const shownSkin = resolveAvatarSkin(settings.avatarSkin, new Date(), claimed);
+  const festiveAuto = (settings.avatarSkin ?? 'auto') === 'auto';
+  const visibleSkins = AVATAR_SKINS.filter((s) => s.id === 'classic' || claimed.includes(s.id as FestivalSkin) || s.id === festival?.festival.skin);
+  const lockedCount = FESTIVALS.length - visibleSkins.length + 1;
+  const breaksLeft = claim ? Math.max(0, CLAIM_BREAKS - claim.breaks) : 0;
+
+  const handleSkinTile = (skin: AvatarSkin): void => {
+    if (claim && !claim.claimed && claim.earned && skin === claim.festival.festival.skin) {
+      setCustomVideoPath(null);
+      onSave({ customVideoPath: null, avatarSkin: skin, claimedSkins: [...claimed, skin] });
+      return;
+    }
+    handleSelectSkin(skin);
+  };
+
+  const [shareStatus, setShareStatus] = useState('');
+  const handleShare = async (mode: 'download' | 'copy'): Promise<void> => {
+    try {
+      const blob = await drawShareCard(settings, shownSkin);
+      if (mode === 'copy') {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setShareStatus('Copied! Paste it into your post. ✨');
+      } else {
+        downloadBlob(blob, `pixel-buddy-${new Date().toLocaleDateString('en-CA')}.png`);
+        setShareStatus('Saved your card. Share the good vibes! ✨');
+      }
+    } catch {
+      setShareStatus(mode === 'copy' ? "Couldn't copy here. Try Download instead." : "Couldn't save the card. Please try again.");
+    }
   };
 
   const handleSelectLibraryItem = (p: string) => {
@@ -394,19 +433,40 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
 
               {/* Avatar grid: default mascot, uploaded media, then an "add" tile */}
               <div className="media-library-grid">
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className={`media-card ${!customVideoPath ? 'media-card-active' : ''}`}
-                  onClick={() => handleResetMedia()}
-                  title="Default Pixel Companion"
-                >
-                  <div className="media-card-thumb">
-                    <img src={buddyMascot} alt="Default buddy" className="media-card-preview" />
-                    {!customVideoPath && <div className="media-card-check">✓</div>}
+                {visibleSkins.map((skin) => {
+                  const isActive = !customVideoPath && shownSkin === skin.id;
+                  const limited = !!claim && !claim.claimed && claim.festival.festival.skin === skin.id;
+                  const label = !limited ? skin.label : claim.earned ? 'Claim it 🎁' : `${skin.label} · ${claim.breaks}/${CLAIM_BREAKS}`;
+                  return (
+                    <div
+                      key={skin.id}
+                      role="button"
+                      tabIndex={0}
+                      className={`media-card ${isActive ? 'media-card-active' : ''}`}
+                      onClick={() => handleSkinTile(skin.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSkinTile(skin.id); } }}
+                      aria-pressed={isActive}
+                      title={limited ? `Limited time: take ${CLAIM_BREAKS} breaks during ${skin.label} to keep this buddy` : skin.title}
+                    >
+                      <div className="media-card-thumb">
+                        <img src={skin.src} alt="" className="media-card-preview" />
+                        {limited && <span className="media-card-limited">Limited</span>}
+                        {isActive && <div className="media-card-check">✓</div>}
+                      </div>
+                      <div className="media-card-label">{label}</div>
+                    </div>
+                  );
+                })}
+
+                {lockedCount > 0 && (
+                  <div className="media-card media-card-locked" title="Festival buddies appear during their festival. Take breaks while it lasts to keep one.">
+                    <div className="media-card-thumb">
+                      <span className="media-card-lock">🔒</span>
+                    </div>
+                    <div className="media-card-label">{lockedCount} to collect</div>
+                    {upcoming[0] && <div className="media-card-sub">Next: {upcoming[0].festival.emoji} {shortDate(upcoming[0].day)}</div>}
                   </div>
-                  <div className="media-card-label">Pixel Buddy</div>
-                </div>
+                )}
 
                 {mediaLibrary.map((p, i) => {
                   const isActive = customVideoPath === p;
@@ -456,6 +516,39 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 </button>
               </div>
               <p className="setting-help">Drop a GIF, PNG, WebP or a green-screen MP4/WebM here or on the buddy.</p>
+              <div className="switch-row" style={{ marginTop: '10px' }}>
+                <div className="switch-label-group">
+                  <span className="switch-label">Dress up for festivals</span>
+                  <span className="switch-sublabel">
+                    {festiveAuto && claim && festival
+                      ? claim.claimed
+                        ? `${festival.festival.emoji} It's ${festival.festival.name}! Dressed up until ${shortDate(festival.lastDay)}`
+                        : claim.earned
+                          ? `${festival.festival.emoji} You earned the ${festival.festival.name} buddy! Tap its tile to keep it`
+                          : `${festival.festival.emoji} It's ${festival.festival.name}! Take ${breaksLeft} more break${breaksLeft === 1 ? '' : 's'} by ${shortDate(festival.lastDay)} to keep this buddy`
+                      : `Limited-time festival buddies: take ${CLAIM_BREAKS} breaks during a festival to keep its buddy`}
+                  </span>
+                </div>
+                <label className="switch non-draggable">
+                  <input
+                    type="checkbox"
+                    aria-label="Dress up for festivals" checked={festiveAuto}
+                    onChange={(e) => handleSave('avatarSkin', e.target.checked ? 'auto' : 'classic')}
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+              {festiveAuto && upcoming.length > 0 && (
+                <div className="festival-calendar" aria-label="Festival calendar">
+                  <span className="festival-calendar-title">Coming up</span>
+                  {upcoming.map((u) => (
+                    <div key={`${u.festival.skin}-${u.day.getTime()}`} className="festival-calendar-row">
+                      <span>{u.festival.emoji} {u.festival.name}</span>
+                      <span>{shortDate(u.day)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Custom Alarm Sound Selector */}
@@ -688,6 +781,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   style={{ width: `${Math.min(100, ((settings.hydrationDrankToday ?? 0) / (settings.hydrationGoal ?? 8)) * 100)}%` }}
                 />
               </div>
+              {/* Log glasses by hand, e.g. ones you drank away from the computer */}
+              <div className="water-log-buttons">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm non-draggable"
+                  aria-label="Remove a glass"
+                  title="Remove a glass"
+                  disabled={(settings.hydrationDrankToday ?? 0) === 0}
+                  onClick={() => onSave({ hydrationDrankToday: Math.max(0, (settings.hydrationDrankToday ?? 0) - 1) })}
+                >
+                  −
+                </button>
+                <button type="button" className="btn btn-primary btn-sm non-draggable" onClick={() => window.api.logHydration()} title="Log a glass you drank">
+                  + Add a glass 💧
+                </button>
+              </div>
             </div>
 
             {/* Daily Break Metrics */}
@@ -715,6 +824,17 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   : "Let's start focusing! Your pixel companion is waiting to check in."}
               </div>
             </div>
+
+            {/* Share today's stats as an image */}
+            <div className="share-day">
+              <button className="btn btn-primary non-draggable" onClick={() => handleShare('download')} title="Save a picture of today's stats with your buddy">
+                📸 Share my day
+              </button>
+              <button className="btn btn-secondary non-draggable" onClick={() => handleShare('copy')} title="Copy the picture to paste into a post or chat">
+                Copy image
+              </button>
+            </div>
+            <p className="share-status" role="status">{shareStatus}</p>
           </div>
         )}
 

@@ -9,6 +9,7 @@ interface SpeechBubbleProps {
   customDialogue?: string | null;
   onMouseDown?: (e: React.MouseEvent) => void;
   userName?: string | null;
+  breakTitle?: string;
 }
 
 export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
@@ -20,6 +21,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
   customDialogue = null,
   onMouseDown,
   userName = null,
+  breakTitle = 'Break Time!',
 }) => {
   const displayName = userName && userName.trim() ? userName.trim() : 'there';
 
@@ -27,7 +29,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
     if (customDialogue) return customDialogue;
     switch (state) {
       case 'BREAK':
-        return `Break Time!\n${tip}`;
+        return `${breakTitle}\n${tip}`;
       
       case 'POPUP':
         if (skipsCount >= 3) {

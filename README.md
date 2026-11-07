@@ -6,7 +6,7 @@ A free desktop companion for a kinder workday. Pixel Buddy stays near the corner
 
 ## Get Pixel Buddy
 
-Download an installer from [GitHub Releases](https://github.com/Harshit-Kandoi/pixel-buddy/releases). The promotional website discovers the latest **published** release and shows direct links only for files that exist. Until the first release is published, it shows a clear release status.
+Get the browser extension on the [Chrome Web Store](https://chromewebstore.google.com/detail/pixel-buddy/ikggibbkgbebflafmlaihlmdpibpdggc), or download a desktop installer from [GitHub Releases](https://github.com/Harshit-Kandoi/pixel-buddy/releases). The promotional website discovers the latest **published** release and shows direct links only for files that exist. Until the first release is published, it shows a clear release status.
 
 | Device | Installer |
 | --- | --- |
@@ -73,17 +73,33 @@ Artifacts are written to `release/`. Mac packaging produces both Apple silicon a
 
 Pixel Buddy can also live in your browser tabs. The extension runs the same timer logic and interface as the desktop app: one shared timer for every tab, with the buddy in the corner of each page.
 
+**[Add Pixel Buddy to Chrome](https://chromewebstore.google.com/detail/pixel-buddy/ikggibbkgbebflafmlaihlmdpibpdggc)**, free on the Chrome Web Store.
+
+To build it from source:
+
 ```bash
 npm run ext:build
 ```
 
 Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, and select `out/extension`. Run the build again and select the reload button on the extension's card after changes.
 
+To test the built extension end to end before a release:
+
+```bash
+npm run ext:test
+```
+
+It installs the build into a throwaway headless Chrome profile (your own profile is never touched) and uses it on a real web page with real clicks: the buddy overlay, a guided break, settings and the festival calendar, water logging, the share card, the rating prompt, a real one-minute break, the toolbar popup, and an upgrade from 1.0.0 settings. It takes about 90 seconds; add `-- --quick` to skip the one-minute break. Needs Google Chrome 126 or later (set `CHROME_PATH` if Chrome isn't in the usual place).
+
+- Breaks are guided: the buddy leads a short stretch, 20-20-20 eye refresh, or breathing routine and acts out each step.
+- Limited-time festival buddies: during a festival the buddy turns into that festival's character (New Year, Sankranti & Pongal, Lunar New Year, Eid, Holi, Onam, Halloween, Diwali, Christmas). Take 3 breaks while it lasts to claim it and keep it; otherwise it's gone until next year. Settings show your collection, the current festival's progress, and what's coming up. Festival dates live in `src/utils/seasons.ts` (mirrored in `website/dist/festivals.mjs`, kept in sync by a test); add future years for the lunar festivals there.
+- **Dashboard → + Add a glass** logs water by hand (for glasses you drank away from the computer); it works from the toolbar popup too.
+- **Dashboard → Share my day** saves or copies a picture of today's stats, sized for social posts.
 - Drag the buddy anywhere; its position is shared across tabs. Clicks pass through the empty space around it.
 - The toolbar icon shows minutes until your next break. Its popup opens settings and stats, plus a **Show on pages** switch. In the extension, **Quit Pixel Buddy** hides the buddy from pages until you switch it back on.
 - When no visible tab is showing the buddy, break and water reminders arrive as system notifications instead.
 - Smart monitoring uses Chrome's idle detection and your activity in browser tabs.
-- Custom buddies and alarm sounds are desktop-only for now. The extension uses the built-in robot and chime. Chrome can't show the buddy on its own pages, like `chrome://` pages and the Web Store.
+- Custom buddies and alarm sounds are desktop-only for now. The extension uses the built-in robot (with its festive outfits) and chime. Chrome can't show the buddy on its own pages, like `chrome://` pages and the Web Store.
 
 ## Promotional website
 

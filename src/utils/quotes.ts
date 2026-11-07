@@ -1,3 +1,5 @@
+import type { FestivalSkin } from './seasons';
+
 export const BREAK_TIPS = [
   "Stretch your arms, shoulders, and back. Feel the tension release.",
   "Drink a glass of water to rehydrate and keep your mind sharp.",
@@ -61,6 +63,69 @@ export const BUDDY_LINES = [
   "I'm right here if you need me. 💚",
 ];
 
+// Said now and then while the buddy wears a festival outfit.
+export const FESTIVE_LINES: Record<FestivalSkin, string[]> = {
+  diwali: [
+    "Happy Diwali! ✨ May your day glow and your bugs stay hidden.",
+    "Shubh Deepavali! 🪔 Rest your eyes, the diyas are bright enough.",
+    "Too many sweets? A short walk makes room for one more. 🍬",
+    "Light a diya, take a breath, take a break. 🪔",
+    "Diwali cleaning tip: close a few tabs. ✨",
+    "Crackers outside, calm focus inside. You've got this. 🎆",
+    "Save one kaju katli for me, okay? 🍬",
+    "Wishing you light, laughter, and a lighter inbox. 🪔",
+  ],
+  christmas: [
+    "Merry Christmas! 🎄 Cookies count as a break, right?",
+    "Ho ho ho! Time to stretch those elf legs. 🎅",
+    "Wrap up that task, then wrap some gifts. 🎁",
+    "Hot cocoa and a short break? Perfect combo. ☕",
+    "Even Santa rests after the big night. 🛷",
+  ],
+  newyear: [
+    "Happy New Year! 🎉 New year, same you, more breaks.",
+    "Resolution idea: more water, fewer tabs. 💧",
+    "Here's to a year of kinder workdays. ✨",
+    "Fresh calendar, fresh start. You've got this! 🗓️",
+  ],
+  sankranti: [
+    "Happy Sankranti! 🪁 Go fly a kite, literally.",
+    "Til-gul ghya, god god bola! 🍬",
+    "Sun's out, kites up. Take a sunny break! ☀️",
+    "Happy Lohri, and Pongalo Pongal! 🍚",
+  ],
+  lunarnewyear: [
+    "Happy Lunar New Year! 🧧 Wishing you luck and lots of breaks.",
+    "New moon, new year, fresh focus. 🏮",
+    "A lucky red envelope of advice: drink some water. 🧧",
+    "May your year be lucky and your bugs be few. ✨",
+  ],
+  eid: [
+    "Eid Mubarak! 🌙 Wishing you peace and a calm day.",
+    "Sweet sevaiyan and a slow break? Perfect. 🍮",
+    "Take a moment, share a smile, rest a little. 🌙",
+    "May your day be bright and your heart be light. ✨",
+  ],
+  onam: [
+    "Happy Onam! 🌼 Time for a sadya-sized break.",
+    "Onam ashamsakal! May your pookalam and your code both bloom. 🌸",
+    "A big feast deserves a little walk afterwards. 🍌",
+    "Maveli is visiting. Look your best: sit up straight! 👑",
+  ],
+  halloween: [
+    "Happy Halloween! 🎃 The scariest thing here is your posture.",
+    "Boo! Did that make you blink? Good, your eyes needed it. 👻",
+    "Trick or treat? Treat yourself to a break. 🍬",
+    "No ghosts here, just unanswered tabs. 🦇",
+  ],
+  holi: [
+    "Happy Holi! 🎨 Let your break be colourful.",
+    "Bura na mano, Holi hai! 💦",
+    "Wash off the colours, keep the good vibes. 🌈",
+    "A splash of water for you, and one for me! 💧",
+  ],
+};
+
 const TIME_LINES: { from: number; to: number; lines: string[] }[] = [
   { from: 5, to: 12, lines: ["Good morning! Let's make today a good one. ☀️", "Morning! Water before coffee? 💧"] },
   { from: 12, to: 14, lines: ["Lunch time soon? Step away from the screen to eat. 🥪", "Afternoon slump? A quick walk helps."] },
@@ -72,10 +137,13 @@ const TIME_LINES: { from: number; to: number; lines: string[] }[] = [
 let lastLine = '';
 
 // Random clicked line, sometimes picked to suit the time of day, never the same twice in a row.
-export function getRandomBuddyLine(now: Date = new Date()): string {
+export function getRandomBuddyLine(now: Date = new Date(), festive: string[] = []): string {
   const hour = now.getHours() < 5 ? now.getHours() + 24 : now.getHours();
   const timed = TIME_LINES.find((t) => hour >= t.from && hour < t.to)?.lines ?? [];
-  const pool = Math.random() < 0.25 && timed.length ? timed : BUDDY_LINES;
+  const roll = Math.random();
+  let pool = BUDDY_LINES;
+  if (festive.length && roll < 0.4) pool = festive;
+  else if (timed.length && roll >= 0.75) pool = timed;
   let line = pool[Math.floor(Math.random() * pool.length)];
   if (line === lastLine && pool.length > 1) {
     line = pool[(pool.indexOf(line) + 1) % pool.length];
