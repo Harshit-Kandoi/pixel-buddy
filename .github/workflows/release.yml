@@ -92,9 +92,48 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxrandr-dev libxtst-dev libxt-dev libxinerama-dev libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev libxkbfile-dev
-      - run: npm ci
+      # Electron and electron-builder download large files from GitHub during install and
+      # packaging. Keep them between runs (keyed on the exact versions), so a release doesn't
+      # depend on those downloads, and retry when a download hits a passing server error
+      # (a 504 from GitHub's file servers sank the first v1.1.1 build).
+      - name: Read Electron versions for the download cache
+        id: electron
+        shell: bash
+        run: |
+          echo "key=$(node -p "const l = require('./package-lock.json').packages; [l['node_modules/electron'].version, l['node_modules/electron-builder'].version].join('-')")" >> "$GITHUB_OUTPUT"
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-downloads-${{ runner.os }}-${{ matrix.arch }}-${{ steps.electron.outputs.key }}
+      - name: Install dependencies (retries passing network errors)
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            npm ci && exit 0
+            echo "::warning::npm ci failed (attempt $attempt of 3); retrying in 30 seconds"
+            sleep 30
+          done
+          exit 1
       - run: npm test
-      - run: npm run ${{ matrix.command }} -- --${{ matrix.arch }} --publish never
+      - name: Build installers (retries passing network errors)
+        shell: bash
+        env:
+          COMMAND: ${{ matrix.command }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          for attempt in 1 2 3; do
+            npm run "$COMMAND" -- "--$ARCH" --publish never && exit 0
+            echo "::warning::Build failed (attempt $attempt of 3); retrying in 30 seconds"
+            sleep 30
+          done
+          exit 1
       - name: Install DMG and check app launch
         if: runner.os == 'macOS'
         shell: bash
