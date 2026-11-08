@@ -4,6 +4,14 @@ import type { ActivityMonitor } from './activity';
 import type { SettingsManager } from './settings';
 import { APP_STATES } from '../utils/constants';
 
+// During a break, smart monitoring ends the break when you come back to work. Coming back
+// means steady input, not a single mouse nudge: this many active seconds within the window.
+export const RETURN_ACTIVE_SECONDS = 4;
+export const RETURN_WINDOW_SECONDS = 8;
+// Using Pixel Buddy itself (clicking it, settings) is not coming back to work: input is
+// ignored for this long after each interaction with the buddy.
+export const BUDDY_INTERACTION_HOLD_SECONDS = 15;
+
 export class Scheduler {
   private timer: NodeJS.Timeout | null = null;
   private stateMachine: StateMachine;
@@ -11,6 +19,8 @@ export class Scheduler {
   private settingsManager: SettingsManager;
   private onTickCallback: ((data: StateMachineData) => void) | null = null;
   private breakGraceTicks = 0;
+  private buddyHoldTicks = 0;
+  private breakActivity: boolean[] = []; // recent seconds of the break: active or not
 
   constructor(
     settingsManager: SettingsManager,
@@ -135,15 +145,21 @@ export class Scheduler {
         break;
 
       case APP_STATES.BREAK: {
-        const inGracePeriod = this.breakGraceTicks > 0;
-        if (inGracePeriod) this.breakGraceTicks--;
-        // Smart Reset: If user returns to PC early (types or clicks mouse)
-        if (!inGracePeriod && settings.smartMonitoringEnabled && isActiveThisSecond) {
-          console.log('Smart Reset: Keyboard/Mouse activity detected during break. Restarting work timer.');
-          this.stateMachine.setWorkSeconds(0);
-          this.stateMachine.resetSkips();
-          this.stateMachine.transitionTo(APP_STATES.WORKING);
-          break;
+        const held = this.breakGraceTicks > 0 || this.buddyHoldTicks > 0;
+        if (this.breakGraceTicks > 0) this.breakGraceTicks--;
+        if (this.buddyHoldTicks > 0) this.buddyHoldTicks--;
+        // Smart Reset: if the user is back at work (steady keyboard/mouse input), end the break early.
+        if (settings.smartMonitoringEnabled && !held) {
+          this.breakActivity.push(isActiveThisSecond);
+          if (this.breakActivity.length > RETURN_WINDOW_SECONDS) this.breakActivity.shift();
+          if (this.breakActivity.filter(Boolean).length >= RETURN_ACTIVE_SECONDS) {
+            console.log('Smart Reset: steady keyboard/mouse activity during break. Restarting work timer.');
+            this.breakActivity = [];
+            this.stateMachine.setWorkSeconds(0);
+            this.stateMachine.resetSkips();
+            this.stateMachine.transitionTo(APP_STATES.WORKING);
+            break;
+          }
         }
 
         // Normal break countdown
@@ -180,10 +196,19 @@ export class Scheduler {
   }
 
   // User Action: Take Break
+  /** The user is using Pixel Buddy itself (clicking it, settings); that isn't coming back to work. */
+  public handleBuddyInteraction(): void {
+    if (this.stateMachine.getState() !== APP_STATES.BREAK) return;
+    this.buddyHoldTicks = BUDDY_INTERACTION_HOLD_SECONDS;
+    this.breakActivity = [];
+  }
+
   public handleTakeBreak(): void {
     const settings = this.settingsManager.getSettings();
     // Do not interpret the click that starts a break as returning to work.
     this.breakGraceTicks = 2;
+    this.buddyHoldTicks = 0;
+    this.breakActivity = [];
     this.activityMonitor.resetMinuteScore();
     this.stateMachine.setSkipSeconds(0);
     this.stateMachine.setSnoozeSeconds(0);

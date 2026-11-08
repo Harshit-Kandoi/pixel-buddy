@@ -106,14 +106,62 @@ describe('Scheduler', () => {
     const sm = scheduler.getStateMachine();
     expect(sm.getState()).toBe(APP_STATES.BREAK);
 
-    // Simulate mouse/key activity on next tick
+    // Steady mouse/key activity: after the 2 s grace period, 4 active seconds mean you're back.
     mockActivityMonitor.tick.mockReturnValue({ isActiveThisSecond: true });
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(5000);
     expect(sm.getState()).toBe(APP_STATES.BREAK);
-    vi.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(1000);
 
     expect(sm.getState()).toBe(APP_STATES.WORKING);
     expect(sm.getData().activeWorkSeconds).toBe(0);
+    scheduler.stop();
+  });
+
+  test('a brief nudge of the mouse does not end a break', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    scheduler.handleTakeBreak();
+    const sm = scheduler.getStateMachine();
+
+    vi.advanceTimersByTime(3000);
+    mockActivityMonitor.tick.mockReturnValue({ isActiveThisSecond: true });
+    vi.advanceTimersByTime(2000); // reaching for the buddy
+    mockActivityMonitor.tick.mockReturnValue({ isActiveThisSecond: false });
+    vi.advanceTimersByTime(20000);
+    expect(sm.getState()).toBe(APP_STATES.BREAK);
+    scheduler.stop();
+  });
+
+  test('using Pixel Buddy during a break (clicking it, settings) does not end the break', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    scheduler.handleTakeBreak();
+    const sm = scheduler.getStateMachine();
+    const breakLeft = sm.getData().breakSecondsLeft;
+
+    // Clicking around in settings for 40 s: lots of input, all of it buddy interaction.
+    mockActivityMonitor.tick.mockReturnValue({ isActiveThisSecond: true });
+    for (let i = 0; i < 8; i++) {
+      scheduler.handleBuddyInteraction();
+      vi.advanceTimersByTime(5000);
+    }
+    expect(sm.getState()).toBe(APP_STATES.BREAK);
+    expect(sm.getData().breakSecondsLeft).toBe(breakLeft - 40); // the break kept counting down
+
+    // Settings closed, back to real work: the 15 s hold from the last click (10 s of it left)
+    // runs out, then 4 s of steady input end the break.
+    vi.advanceTimersByTime(13000);
+    expect(sm.getState()).toBe(APP_STATES.BREAK);
+    vi.advanceTimersByTime(1000);
+    expect(sm.getState()).toBe(APP_STATES.WORKING);
+    scheduler.stop();
+  });
+
+  test('buddy interaction outside a break changes nothing', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    scheduler.handleBuddyInteraction();
+    expect(scheduler.getStateMachine().getState()).toBe(APP_STATES.WORKING);
     scheduler.stop();
   });
 

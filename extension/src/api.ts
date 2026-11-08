@@ -79,6 +79,7 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     onSettingsUpdated: callback => subscribe(settingsUpdates, callback),
     getState: () => call({ type: 'getState' }),
     takeBreak: () => act('takeBreak'),
+    buddyInteraction: () => act('buddyInteraction'),
     snooze: () => act('snooze'),
     skip: () => act('skip'),
     reset: () => act('reset'),

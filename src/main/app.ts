@@ -259,6 +259,10 @@ app.whenReady().then(() => {
     scheduler.handleTakeBreak();
   });
 
+  ipcMain.on('scheduler:buddy-interaction', () => {
+    scheduler.handleBuddyInteraction();
+  });
+
   ipcMain.on('scheduler:snooze', () => {
     scheduler.handleSnooze();
   });

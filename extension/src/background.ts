@@ -232,6 +232,7 @@ function broadcast(message: Push): void {
 function runAction(action: SchedulerAction): void {
   switch (action) {
     case 'takeBreak': return scheduler.handleTakeBreak();
+    case 'buddyInteraction': return scheduler.handleBuddyInteraction();
     case 'snooze': return scheduler.handleSnooze();
     case 'skip': return scheduler.handleSkip();
     case 'reset': return scheduler.handleReset();

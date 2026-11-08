@@ -1,6 +1,10 @@
 [build]
   command = "node scripts/check-website.mjs"
   publish = "website/dist"
+  # Netlify charges credits per build. Skip the build (exit 0) unless the website changed;
+  # app releases and the release bot's version commits don't touch it. GitHub Pages
+  # (.github/workflows/website.yml) publishes the same site for free.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- website/ scripts/check-website.mjs netlify.toml"
 
 [build.environment]
   NPM_FLAGS = "--ignore-scripts"

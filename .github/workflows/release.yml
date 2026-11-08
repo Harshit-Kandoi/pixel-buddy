@@ -94,8 +94,10 @@ jobs:
           sudo apt-get install -y libx11-dev libxrandr-dev libxtst-dev libxt-dev libxinerama-dev libx11-xcb-dev libxkbcommon-dev libxkbcommon-x11-dev libxkbfile-dev
       # Electron and electron-builder download large files from GitHub during install and
       # packaging. Keep them between runs (keyed on the exact versions), so a release doesn't
-      # depend on those downloads, and retry when a download hits a passing server error
-      # (a 504 from GitHub's file servers sank the first v1.1.1 build).
+      # depend on those downloads. If GitHub's release downloads fail (a 504 outage sank the
+      # first v1.1.1 build), the retries fetch the same files from the npmmirror.com backup;
+      # every Electron file is then checked against the official checksums pinned in the
+      # electron npm package, and electron-builder's tools against checksums built into it.
       - name: Read Electron versions for the download cache
         id: electron
         shell: bash
@@ -112,28 +114,40 @@ jobs:
             ~/AppData/Local/electron/Cache
             ~/AppData/Local/electron-builder/Cache
           key: electron-downloads-${{ runner.os }}-${{ matrix.arch }}-${{ steps.electron.outputs.key }}
-      - name: Install dependencies (retries passing network errors)
+      - name: Install dependencies (GitHub first, backup mirror on retry)
         shell: bash
         run: |
           for attempt in 1 2 3; do
+            if [ "$attempt" -gt 1 ]; then
+              export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+              export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+              echo "::warning::Attempt $attempt downloads Electron from the npmmirror.com backup"
+            fi
             npm ci && exit 0
             echo "::warning::npm ci failed (attempt $attempt of 3); retrying in 30 seconds"
             sleep 30
           done
           exit 1
       - run: npm test
-      - name: Build installers (retries passing network errors)
+      - name: Build installers (GitHub first, backup mirror on retry)
         shell: bash
         env:
           COMMAND: ${{ matrix.command }}
           ARCH: ${{ matrix.arch }}
         run: |
           for attempt in 1 2 3; do
+            if [ "$attempt" -gt 1 ]; then
+              export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+              export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+              echo "::warning::Attempt $attempt downloads Electron and build tools from the npmmirror.com backup"
+            fi
             npm run "$COMMAND" -- "--$ARCH" --publish never && exit 0
             echo "::warning::Build failed (attempt $attempt of 3); retrying in 30 seconds"
             sleep 30
           done
           exit 1
+      - name: Check Electron downloads against the official checksums
+        run: node scripts/verify-electron-downloads.mjs
       - name: Install DMG and check app launch
         if: runner.os == 'macOS'
         shell: bash

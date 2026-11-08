@@ -254,6 +254,29 @@ try {
   if (opened) await send("Target.closeTarget", { targetId: opened.targetId });
   check("Rating prompt never asks again after rating", (await evaluate(frame, `window.api.getSettings().then(s => s.reviewAskAt)`)) === -1);
 
+  // Using Pixel Buddy during a break (here: clicking around settings in the toolbar popup)
+  // must not end the break; steady input in the page afterwards (back to work) does.
+  await evaluate(frame, `window.api.saveSettings({ breakDuration: 5 })`);
+  await evaluate(frame, `window.api.takeBreak()`);
+  await waitFor(() => evaluate(frame, `window.api.getState().then(d => d.state === 'BREAK')`), "a break");
+  const { targetId: settingsPopupId } = await send("Target.createTarget", { url: `${origin}/popup.html` });
+  const settingsPopup = await attach(settingsPopupId);
+  await waitFor(() => evaluate(settingsPopup, `!!document.querySelector('.settings-panel')`), "settings in the popup");
+  for (let i = 0; i < 12; i++) {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 200 + i * 15, y: 300 }, page);
+    await evaluate(settingsPopup, `document.querySelector('.settings-panel').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`);
+    await delay(1000);
+  }
+  const during = await evaluate(frame, `window.api.getState().then(d => d.state)`);
+  check("Using settings during a break doesn't end it", during === "BREAK", during);
+  await send("Target.closeTarget", { targetId: settingsPopupId });
+  const backAt = Date.now();
+  const ended = await waitFor(async () => {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 300 + (Date.now() % 200), y: 320 }, page);
+    return evaluate(frame, `window.api.getState().then(d => d.state === 'WORKING')`);
+  }, "the break to end", 35000).catch(() => false);
+  check("Steady work afterwards ends the break", ended, ended ? `after ${Math.round((Date.now() - backAt) / 1000)} s of input` : "still on break");
+
   // A real break runs to the end
   if (!QUICK) {
     await evaluate(frame, `window.api.saveSettings({ breakDuration: 1, lifetimeBreaksCompleted: 0, statsBreaksCompletedToday: 0 })`);

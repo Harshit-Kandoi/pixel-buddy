@@ -15,6 +15,7 @@ const api = {
   // Scheduler API
   getState: () => ipcRenderer.invoke('scheduler:get-state'),
   takeBreak: () => ipcRenderer.send('scheduler:take-break'),
+  buddyInteraction: () => ipcRenderer.send('scheduler:buddy-interaction'),
   snooze: () => ipcRenderer.send('scheduler:snooze'),
   skip: () => ipcRenderer.send('scheduler:skip'),
   reset: () => ipcRenderer.send('scheduler:reset'),

@@ -32,7 +32,7 @@ These builds have no trusted publisher signature or Apple notarization. macOS Ga
 
 - Pick Pomodoro (25/5), Balanced (55/5), or Deep focus (90/10), or set your own durations.
 - Pause or resume reminders from the timer widget or system tray. Reset clears old cooldowns and starts fresh.
-- Use break reminders with snooze and skip controls. Smart monitoring pauses focus while away and recognizes long offline breaks.
+- Use break reminders with snooze and skip controls. Smart monitoring pauses focus while away and recognizes long offline breaks. During a break, a few seconds of steady typing or mousing means you're back and ends the break early; using Pixel Buddy itself (clicking it, settings) doesn't count.
 - Breaks are guided: the buddy leads a short stretch, a 20-20-20 eye refresh, or a breathing routine, and acts out each step.
 - Turn off smart monitoring to use regular timers. In that mode, mouse activity does not interrupt a break.
 - Track glasses of water and set your reminder interval. **Dashboard → + Add a glass** logs water you drank away from the computer. Daily counters reset at midnight, including when the app stays open.
@@ -121,6 +121,8 @@ Website, docs, Markdown, and store-image changes don't trigger a release; the we
 
 **One-time setup on GitHub:** in **Settings → Actions → General → Workflow permissions**, choose **Read and write permissions** so the workflow can push the version commit and tag. If `main` has branch protection or a ruleset, allow GitHub Actions to bypass it, or the version step fails at `git push`. Keep the repository public: the runners are free only for public repositories, and the workflows skip private ones.
 
+If GitHub's release downloads fail during a build (they returned 504s on 8 Nov 2026), the install and build steps retry, fetching Electron and electron-builder's tools from the [npmmirror.com](https://npmmirror.com) backup. Every Electron file is then checked against the official checksums pinned in the `electron` npm package (`scripts/verify-electron-downloads.mjs`), and electron-builder checks its tools against checksums built into it, so a tampered download stops the release. Downloads are cached between runs.
+
 Pushing a `v*` tag by hand still works: it builds the same installers and creates a **draft** release for you to publish. See [the release guide](docs/releasing.md) for details, checksum verification, and hosting.
 
 ## Promotional website
@@ -135,7 +137,7 @@ Open `http://localhost:4173`. No website dependencies or build step are needed. 
 
 ### Deploy to Netlify
 
-The root `netlify.toml` deploys only `website/dist/` and runs `node scripts/check-website.mjs` to validate its assets and links. It overrides the desktop build command and publish directory configured in the Netlify dashboard.
+The root `netlify.toml` deploys only `website/dist/` and runs `node scripts/check-website.mjs` to validate its assets and links. It skips the build unless `website/`, the check script, or `netlify.toml` changed, so app releases and the release bot's version commits don't use Netlify credits. GitHub Pages publishes the same site for free; if you don't use the Netlify address, you can disconnect the site in Netlify. It overrides the desktop build command and publish directory configured in the Netlify dashboard.
 
 Netlify installs npm dependencies with `--ignore-scripts`, skipping the Electron postinstall rebuild and native dependency install scripts. This website does not need those packages. Desktop dependencies remain in `dependencies` so electron-builder can include them in installers; local development and desktop release workflows keep their normal install and build behavior. Do not use `npm run build` for this static website: that command builds the Electron app.
 

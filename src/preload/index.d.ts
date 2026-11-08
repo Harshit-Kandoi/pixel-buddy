@@ -10,6 +10,8 @@ declare global {
       onSettingsUpdated(callback: (settings: AppSettings) => void): () => void
       getState(): Promise<StateMachineData>
       takeBreak(): void
+      /** The user is using Pixel Buddy itself; during a break this isn't coming back to work. */
+      buddyInteraction(): void
       snooze(): void
       skip(): void
       reset(): void

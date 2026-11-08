@@ -9,7 +9,7 @@ export type Call =
   | { type: 'action'; action: SchedulerAction }
   | { type: 'input' };
 
-export type SchedulerAction = 'takeBreak' | 'snooze' | 'skip' | 'reset' | 'togglePause' | 'logHydration' | 'snoozeHydration' | 'dismissHydration';
+export type SchedulerAction = 'takeBreak' | 'buddyInteraction' | 'snooze' | 'skip' | 'reset' | 'togglePause' | 'logHydration' | 'snoozeHydration' | 'dismissHydration';
 
 // Pushed from the service worker over a long-lived port while a page is visible.
 export type Push =

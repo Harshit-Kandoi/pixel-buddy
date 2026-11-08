@@ -209,6 +209,26 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     }
   }, [settings]);
 
+  // Clicking the buddy, using settings, or typing in them during a break is using Pixel Buddy,
+  // not coming back to work: tell the scheduler so it doesn't end the break.
+  useEffect(() => {
+    let last = 0;
+    const report = (): void => {
+      if (stateDataRef.current?.state !== 'BREAK' || Date.now() - last < 2000) return;
+      last = Date.now();
+      window.api.buddyInteraction();
+    };
+    const events = ['pointerdown', 'keydown', 'wheel'] as const;
+    events.forEach((type) => window.addEventListener(type, report, { capture: true, passive: true }));
+    // Reading settings without touching anything still counts.
+    const whileOpen = showSettings ? setInterval(report, 5000) : null;
+    if (showSettings) report();
+    return () => {
+      events.forEach((type) => window.removeEventListener(type, report, { capture: true }));
+      if (whileOpen) clearInterval(whileOpen);
+    };
+  }, [showSettings]);
+
   // Sync UI Color Theme Hue (CSS variable)
   useEffect(() => {
     if (settings) {

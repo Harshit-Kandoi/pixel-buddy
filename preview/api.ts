@@ -35,6 +35,7 @@ window.api = {
   onSettingsUpdated: callback => subscribe(settingsUpdates, callback),
   getState: async () => scheduler.getStateMachine().getData(),
   takeBreak: () => scheduler.handleTakeBreak(),
+  buddyInteraction: () => scheduler.handleBuddyInteraction(),
   snooze: () => scheduler.handleSnooze(),
   skip: () => scheduler.handleSkip(),
   reset: () => scheduler.handleReset(),
