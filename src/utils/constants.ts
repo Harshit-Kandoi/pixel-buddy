@@ -1,3 +1,5 @@
+import type { AvatarSkinSetting, FestivalSkin } from './seasons';
+
 export const APP_STATES = {
   WORKING: 'WORKING',
   POPUP: 'POPUP',
@@ -19,6 +21,9 @@ export const DEFAULT_SETTINGS = {
   alwaysVisible: true,
   themeHue: 153, // soft green companion theme
   customVideoPath: null as string | null,
+  avatarSkin: 'auto' as AvatarSkinSetting, // dresses up for festivals on its own
+  claimedSkins: [] as FestivalSkin[],
+  festivalBreaks: {} as Record<string, number>,
   customSoundPath: null as string | null,
   keyingMode: 'auto' as 'auto' | 'native' | 'none',
   windowX: null as number | null,
@@ -38,6 +43,8 @@ export const DEFAULT_SETTINGS = {
   statsBreaksCompletedToday: 0,
   statsBreaksSkippedToday: 0,
   statsBreaksSnoozedToday: 0,
+  lifetimeBreaksCompleted: 0,
+  reviewAskAt: 3,
 };
 
 export const ACTIVITY_WEIGHTS = {

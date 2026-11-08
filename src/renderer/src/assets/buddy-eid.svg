@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 250" fill="none">
+<style>
+.twinkle{animation:twinkle 2.4s ease-in-out infinite}.late{animation-delay:1.2s}
+.flame{animation:flicker .9s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
+.glow{animation:glow 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
+.bob{animation:bob 3s ease-in-out infinite}
+.fall{animation:fall 3s linear infinite}
+@keyframes twinkle{50%{opacity:.25}}
+@keyframes flicker{to{transform:scale(.9,1.08) rotate(3deg)}}
+@keyframes glow{50%{opacity:.15;transform:scale(.85)}}
+@keyframes bob{50%{transform:translate(-3px,4px) rotate(-3deg)}}.bob.late{animation-delay:-1.5s}
+@keyframes fall{0%{transform:translateY(-4px);opacity:0}20%{opacity:1}100%{transform:translateY(14px);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<ellipse cx="120" cy="226" rx="70" ry="12" fill="#0b3b36" opacity=".12"/>
+<path d="M85 180v35h-28v-20h14v-21m84 6v35h28v-20h-14v-21" fill="#11685b" stroke="#0b3b36" stroke-width="6" stroke-linejoin="round"/>
+<path d="M47 112H27v57h22m144-57h20v57h-22" fill="#1f9783" stroke="#0b3b36" stroke-width="6"/>
+<path d="M58 62h124v17h18v96h-18v17H58v-17H40V79h18V62Z" fill="#2bb39b" stroke="#0b3b36" stroke-width="6" stroke-linejoin="round"/>
+<path d="M60 84h120v65H60z" fill="#effbf7" stroke="#0b3b36" stroke-width="6"/>
+<path d="M76 117c4-9 14-9 18 0m52 0c4-9 14-9 18 0" stroke="#0b3b36" stroke-width="6" stroke-linecap="round"/>
+<path d="M106 126c4 9 24 9 28 0" stroke="#0b3b36" stroke-width="6" stroke-linecap="round"/>
+<circle cx="73" cy="132" r="6" fill="#ff9e8a" opacity=".75"/><circle cx="167" cy="132" r="6" fill="#ff9e8a" opacity=".75"/>
+<path d="M83 162h73" stroke="#178a77" stroke-width="6"/>
+<path d="M120 61V44" stroke="#0b3b36" stroke-width="6"/>
+<circle class="glow" cx="120" cy="24" r="20" fill="#ffe08a" opacity=".45"/>
+<path d="M127 6a18 18 0 1 0 0 34 14 14 0 1 1 0-34Z" fill="#ffd23f" stroke="#0b3b36" stroke-width="4" stroke-linejoin="round"/>
+<path class="twinkle late" d="M134 15l2.4499999999999997 4.550000000000001 4.550000000000001 2.4499999999999997-4.550000000000001 2.4499999999999997-2.4499999999999997 4.550000000000001-2.4499999999999997-4.550000000000001-4.550000000000001-2.4499999999999997 4.550000000000001-2.4499999999999997Z" fill="#ffd23f"/>
+<path d="M30 150v8" stroke="#0b3b36" stroke-width="3"/>
+<path d="M20 160h20l4 8v18l-4 8H20l-4-8v-18Z" fill="#ffd23f" stroke="#0b3b36" stroke-width="4" stroke-linejoin="round"/>
+<path class="glow" d="M24 170h12v14H24z" fill="#fff3b0"/>
+<path d="M18 160h24M18 194h24" stroke="#0b3b36" stroke-width="4" stroke-linecap="round"/>
+<path class="twinkle late" d="M24 31l3.15 5.85 5.85 3.15-5.85 3.15-3.15 5.85-3.15-5.85-5.85-3.15 5.85-3.15Z" fill="#ffd23f"/>
+<path class="twinkle" d="M212 22l2.8 5.2 5.2 2.8-5.2 2.8-2.8 5.2-2.8-5.2-5.2-2.8 5.2-2.8Z" fill="#ffffff"/>
+<path class="twinkle late" d="M220 86l2.0999999999999996 3.9000000000000004 3.9000000000000004 2.0999999999999996-3.9000000000000004 2.0999999999999996-2.0999999999999996 3.9000000000000004-2.0999999999999996-3.9000000000000004-3.9000000000000004-2.0999999999999996 3.9000000000000004-2.0999999999999996Z" fill="#ffd23f"/>
+<circle class="twinkle" cx="200" cy="58" r="3" fill="#ffd23f"/>
+</svg>

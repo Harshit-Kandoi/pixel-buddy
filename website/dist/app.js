@@ -1,4 +1,5 @@
 import { repository, releasesUrl, groupAssets, assetLabel } from './releases.mjs';
+import { activeFestival, nextOfEach } from './festivals.mjs';
 
 const status = document.querySelector('#release-status');
 async function loadRelease() {
@@ -34,15 +35,6 @@ async function loadRelease() {
   }
 }
 loadRelease();
-
-// Paste the Chrome Web Store listing URL here once the extension is approved.
-const chromeStoreUrl = '';
-if (chromeStoreUrl) {
-  const chromeLink = document.querySelector('#chrome-link');
-  chromeLink.href = chromeStoreUrl;
-  chromeLink.textContent = 'Add to Chrome ↗';
-  document.querySelector('#chrome-note').textContent = 'Free on the Chrome Web Store';
-}
 
 const command = document.querySelector('#install-command');
 const platformSelect = document.querySelector('#terminal-platform');
@@ -90,7 +82,7 @@ function renderDemo() {
 }
 document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => {
   mode = button.dataset.mode; running = false; secondsLeft = mode === 'break' ? 5 * 60 : 25 * 60;
-  message.textContent = { focus: 'Let’s make a little space to focus.', break: 'Unclench your jaw. Roll your shoulders. Breathe.', water: 'A little sip, a little reset. You’ve got this.' }[mode];
+  message.textContent = { focus: 'Let’s make a little space to focus.', break: '🙆 Stretch with me: press start and follow along.', water: 'A little sip, a little reset. You’ve got this.' }[mode];
   document.querySelectorAll('[data-mode]').forEach(tab => { const active = tab === button; tab.classList.toggle('active', active); tab.setAttribute('aria-pressed', String(active)); });
   renderDemo();
 }));
@@ -103,5 +95,51 @@ setInterval(() => {
   if (!running) return;
   secondsLeft = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
   if (secondsLeft === 0) { running = false; message.textContent = mode === 'break' ? 'A fresh start. Ready when you are.' : 'Time for a little breather.'; }
+  else if (mode === 'break') {
+    // The same guided stretch the app leads, one step every few seconds.
+    const step = Math.floor((300 - secondsLeft) / 6) % STRETCH.length;
+    message.textContent = `${step + 1}/${STRETCH.length} · ${STRETCH[step]}`;
+  }
+  demoBuddy.classList.toggle('stretching', running && mode === 'break');
   renderDemo();
 }, 250);
+
+const STRETCH = ['Reach both arms to the sky. Big stretch!', 'Lean slowly left… and right.', 'Roll your shoulders back, nice and slow.', 'Clasp your hands behind you, open your chest.', 'Shake out your hands. Lovely!'];
+const demoBuddy = document.querySelector('#demo-buddy');
+
+// The buddy celebrates with you: festival character in the hero, and the calendar in date order.
+const now = new Date();
+const festival = activeFestival(now);
+if (festival) {
+  const { skin, name, emoji } = festival.festival;
+  for (const img of [document.querySelector('#hero-buddy'), demoBuddy]) {
+    img.src = `assets/buddy-${skin}.svg`;
+    img.alt = `Pixel Buddy dressed up for ${name}`;
+  }
+  document.querySelector('#hero-bubble').innerHTML = `Happy ${name}! ${emoji}<br>Don’t forget a little break. <span>✦</span>`;
+}
+// Limited-time festival buddies: the buddy transforms into this festival's character, or
+// into a silhouette of the next one, without showing the whole collection.
+const stage = document.querySelector('#season-buddies');
+const form = document.querySelector('#season-form');
+const tag = document.querySelector('#season-tag');
+const caption = document.querySelector('#season-caption');
+const shortDay = d => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+if (festival) {
+  const { skin, name, emoji } = festival.festival;
+  form.src = `assets/buddy-${skin}.svg`;
+  form.alt = `The ${name} buddy`;
+  form.classList.remove('mystery');
+  tag.textContent = `HAPPENING NOW · UNTIL ${shortDay(festival.lastDay).toUpperCase()}`;
+  tag.classList.add('now');
+  caption.textContent = `The ${name} buddy is here ${emoji} Take 3 breaks by ${shortDay(festival.lastDay)} to keep it.`;
+} else {
+  const next = nextOfEach(now)[0];
+  if (next) {
+    form.src = `assets/buddy-${next.festival.skin}.svg`;
+    tag.textContent = `NEXT · ${shortDay(next.day).toUpperCase()}`;
+    caption.textContent = `Something’s coming for ${next.festival.name} ${next.festival.emoji} Who will your buddy be?`;
+  }
+}
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) stage.classList.add('transformed');
+else setInterval(() => stage.classList.toggle('transformed'), 2800);

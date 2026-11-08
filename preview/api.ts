@@ -71,6 +71,8 @@ export const preview = {
   focus: () => scheduler.handleReset(),
   reminder: () => { scheduler.handleReset(); scheduler.getStateMachine().setWorkSeconds(settings.workDuration * 60); scheduler.getStateMachine().transitionTo('POPUP'); },
   break: () => { scheduler.handleReset(); scheduler.handleTakeBreak(); },
+  // A break that started this many seconds ago (for guided-routine screenshots).
+  breakAt: (elapsed: number) => { preview.break(); scheduler.getStateMachine().setBreakSeconds(settings.breakDuration * 60 - elapsed); },
   water: () => { scheduler.handleReset(); scheduler.getStateMachine().setHydrationSeconds(0); scheduler.getStateMachine().setHydrationReminderActive(true); },
 };
 scheduler.start(data => ticks.forEach(callback => callback({ ...data })));

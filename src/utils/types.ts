@@ -1,4 +1,5 @@
 import { AppState } from './constants';
+import type { AvatarSkinSetting, FestivalSkin } from './seasons';
 
 export interface AppSettings {
   workDuration: number;
@@ -11,6 +12,11 @@ export interface AppSettings {
   alwaysVisible: boolean;
   themeHue: number;
   customVideoPath: string | null;
+  avatarSkin: AvatarSkinSetting;
+  /** Festival buddies claimed by taking breaks during their festival; kept forever. */
+  claimedSkins: FestivalSkin[];
+  /** Breaks completed per festival season (see seasonKey). */
+  festivalBreaks: Record<string, number>;
   customSoundPath: string | null;
   keyingMode: 'auto' | 'native' | 'none';
   windowX: number | null;
@@ -30,6 +36,9 @@ export interface AppSettings {
   statsBreaksCompletedToday: number;
   statsBreaksSkippedToday: number;
   statsBreaksSnoozedToday: number;
+  lifetimeBreaksCompleted: number;
+  /** Ask for a rating once this many breaks are done; -1 means never ask again. */
+  reviewAskAt: number;
 }
 
 // Where the buddy sits in its window (window coordinates) at the end of a drag, now and

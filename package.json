@@ -27,7 +27,9 @@
     "app:preview": "vite --config vite.preview.config.ts",
     "app:preview:build": "vite build --config vite.preview.config.ts",
     "ext:build": "vite build -c vite.extension.config.ts && vite build -c vite.extension.config.ts --mode content",
-    "ext:zip": "npm run ext:build && node scripts/zip-extension.mjs"
+    "ext:zip": "npm run ext:build && node scripts/zip-extension.mjs",
+    "ext:test": "npm run ext:build && node scripts/extension-e2e.mjs",
+    "ext:screenshots": "node scripts/store-screenshots.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

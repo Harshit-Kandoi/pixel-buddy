@@ -1,4 +1,5 @@
 import { StateMachine, StateMachineData } from './stateMachine';
+import { recordFestivalBreak } from '../utils/seasons';
 import type { ActivityMonitor } from './activity';
 import type { SettingsManager } from './settings';
 import { APP_STATES } from '../utils/constants';
@@ -150,7 +151,11 @@ export class Scheduler {
         if (this.stateMachine.getData().breakSecondsLeft === 0) {
           console.log('Break completed successfully.');
           const completedCount = settings.statsBreaksCompletedToday ?? 0;
-          this.settingsManager.save({ statsBreaksCompletedToday: completedCount + 1 });
+          this.settingsManager.save({
+            statsBreaksCompletedToday: completedCount + 1,
+            lifetimeBreaksCompleted: (settings.lifetimeBreaksCompleted ?? 0) + 1,
+            festivalBreaks: recordFestivalBreak(settings.festivalBreaks),
+          });
 
           this.stateMachine.setWorkSeconds(0);
           this.stateMachine.resetSkips();

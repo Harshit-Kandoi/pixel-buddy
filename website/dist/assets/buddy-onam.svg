@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 250" fill="none">
+<style>
+.twinkle{animation:twinkle 2.4s ease-in-out infinite}.late{animation-delay:1.2s}
+.flame{animation:flicker .9s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
+.glow{animation:glow 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
+.bob{animation:bob 3s ease-in-out infinite}
+.fall{animation:fall 3s linear infinite}
+@keyframes twinkle{50%{opacity:.25}}
+@keyframes flicker{to{transform:scale(.9,1.08) rotate(3deg)}}
+@keyframes glow{50%{opacity:.15;transform:scale(.85)}}
+@keyframes bob{50%{transform:translate(-3px,4px) rotate(-3deg)}}.bob.late{animation-delay:-1.5s}
+@keyframes fall{0%{transform:translateY(-4px);opacity:0}20%{opacity:1}100%{transform:translateY(14px);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<ellipse cx="120" cy="226" rx="70" ry="12" fill="#4a3410" opacity=".12"/>
+<path d="M85 180v35h-28v-20h14v-21m84 6v35h28v-20h-14v-21" fill="#c9a85a" stroke="#4a3410" stroke-width="6" stroke-linejoin="round"/>
+<path d="M47 112H27v57h22m144-57h20v57h-22" fill="#efe3bf" stroke="#4a3410" stroke-width="6"/>
+<path d="M58 62h124v17h18v96h-18v17H58v-17H40V79h18V62Z" fill="#f7efd6" stroke="#4a3410" stroke-width="6" stroke-linejoin="round"/>
+<path d="M60 84h120v65H60z" fill="#fffaf0" stroke="#4a3410" stroke-width="6"/>
+<path d="M76 117c4-9 14-9 18 0m52 0c4-9 14-9 18 0" stroke="#4a3410" stroke-width="6" stroke-linecap="round"/>
+<path d="M106 126c4 9 24 9 28 0" stroke="#4a3410" stroke-width="6" stroke-linecap="round"/>
+<circle cx="73" cy="132" r="6" fill="#ff9b7a" opacity=".75"/><circle cx="167" cy="132" r="6" fill="#ff9b7a" opacity=".75"/>
+<path d="M44 168h152" stroke="#d4a017" stroke-width="8"/>
+<path d="M44 176h152" stroke="#b5121b" stroke-width="3"/>
+<path d="M62 74h116" stroke="#d4a017" stroke-width="5"/>
+<path d="M120 61V42" stroke="#4a3410" stroke-width="6"/>
+<circle cx="129.0" cy="30.0" r="7" fill="#ffb703" stroke="#4a3410" stroke-width="2"/>
+<circle cx="124.5" cy="37.8" r="7" fill="#ffb703" stroke="#4a3410" stroke-width="2"/>
+<circle cx="115.5" cy="37.8" r="7" fill="#ffb703" stroke="#4a3410" stroke-width="2"/>
+<circle cx="111.0" cy="30.0" r="7" fill="#ffb703" stroke="#4a3410" stroke-width="2"/>
+<circle cx="115.5" cy="22.2" r="7" fill="#ffb703" stroke="#4a3410" stroke-width="2"/>
+<circle cx="124.5" cy="22.2" r="7" fill="#ffb703" stroke="#4a3410" stroke-width="2"/>
+<circle cx="120" cy="30" r="6" fill="#e85d04" stroke="#4a3410" stroke-width="2"/>
+<ellipse cx="120" cy="228" rx="78" ry="14" fill="#e85d04" opacity=".9"/>
+<ellipse cx="120" cy="228" rx="58" ry="10" fill="#ffb703"/>
+<ellipse cx="120" cy="228" rx="38" ry="7" fill="#f8f9fa"/>
+<ellipse cx="120" cy="228" rx="20" ry="4" fill="#9d0208"/>
+<path d="M85 180v35h-28v-20h14v-21m84 6v35h28v-20h-14v-21" fill="#c9a85a" stroke="#4a3410" stroke-width="6" stroke-linejoin="round"/>
+<circle class="twinkle" cx="24" cy="60" r="5" fill="#ffb703"/>
+<circle class="twinkle late" cx="214" cy="48" r="5" fill="#e85d04"/>
+<circle class="twinkle late" cx="30" cy="110" r="3" fill="#e85d04"/>
+<circle class="twinkle" cx="216" cy="110" r="3" fill="#ffb703"/>
+</svg>

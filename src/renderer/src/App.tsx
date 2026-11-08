@@ -5,7 +5,17 @@ import { Timer } from './components/Timer';
 import { Settings } from './components/Settings';
 import { WidgetPanel } from './components/WidgetPanel';
 import { AppSettings, BuddyAnchor, StateMachineData } from '../../utils/types';
-import { getRandomTip, getRandomBuddyLine } from '../../utils/quotes';
+import { getRandomTip, getRandomBuddyLine, FESTIVE_LINES } from '../../utils/quotes';
+import { CLAIM_BREAKS, claimStatus, resolveAvatarSkin } from '../../utils/seasons';
+import { avatarSrc } from './avatars';
+import { routineForBreak, stepAt } from '../../utils/breakRoutines';
+import { CHROME_REVIEW_URL, EDGE_ADDONS_URL, GITHUB_URL } from '../../utils/links';
+
+const IN_EXTENSION = location.protocol === 'chrome-extension:';
+const IS_EDGE = /\bEdg\//.test(navigator.userAgent);
+// Where "Rate" goes: the store this copy most likely came from (Edge users can install from the
+// Chrome Web Store until the Edge listing exists); the desktop app asks for a GitHub star instead.
+const STORE_REVIEW_URL = !IN_EXTENSION ? '' : IS_EDGE && EDGE_ADDONS_URL ? EDGE_ADDONS_URL : CHROME_REVIEW_URL;
 import { playChime, playWorriedBeep } from '../../utils/sounds';
 import { toMediaUrl } from '../../utils/mediaUrl';
 
@@ -47,6 +57,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const [clickedDialogue, setClickedDialogue] = useState<string | null>(null);
   const [clickAnimClass, setClickAnimClass] = useState<string>('');
   const [isDismissed, setIsDismissed] = useState(false);
+  const [claimLaterAt, setClaimLaterAt] = useState(-1); // "Later" on the claim prompt waits for the next break
+  const lastFestivalBreaks = useRef<number | null>(null);
 
   // Drag and click tracking refs
   const dragThreshold = 5;
@@ -178,6 +190,24 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
       lastStateRef.current = stateData.state;
     }
   }, [stateData]);
+
+  // Each break during a festival brings you closer to keeping its buddy: say so.
+  useEffect(() => {
+    if (!settings) return;
+    const status = claimStatus(settings);
+    if (!status || status.claimed) {
+      lastFestivalBreaks.current = null;
+      return;
+    }
+    const previous = lastFestivalBreaks.current;
+    lastFestivalBreaks.current = status.breaks;
+    if (previous !== null && status.breaks > previous && !status.earned) {
+      const { name, emoji } = status.festival.festival;
+      const until = status.festival.lastDay.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+      const left = CLAIM_BREAKS - status.breaks;
+      setClickedDialogue(`${status.breaks}/${CLAIM_BREAKS} breaks toward the ${name} buddy ${emoji}\n${left} more by ${until} and it's yours to keep!`);
+    }
+  }, [settings]);
 
   // Sync UI Color Theme Hue (CSS variable)
   useEffect(() => {
@@ -316,7 +346,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     const soundEnabled = settingsRef.current?.sound ?? true;
     playChime(soundEnabled);
 
-    const randomQuote = getRandomBuddyLine();
+    const skin = resolveAvatarSkin(settingsRef.current?.avatarSkin, new Date(), settingsRef.current?.claimedSkins);
+    const randomQuote = getRandomBuddyLine(new Date(), skin === 'classic' ? [] : FESTIVE_LINES[skin]);
     setClickedDialogue(randomQuote);
 
     // Only use buddy-jump on click — never buddy-spin (which rotates GIFs)
@@ -341,12 +372,40 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     return <div style={{ display: 'none' }} />;
   }
 
+  // The buddy leads a short routine through the first minute or so of each break.
+  const breakStep = stateData.state === 'BREAK'
+    ? stepAt(routineForBreak(settings.statsBreaksCompletedToday ?? 0), settings.breakDuration * 60 - stateData.breakSecondsLeft)
+    : null;
+
+  // Festival buddies are limited-time: take enough breaks during the festival to claim one.
+  const claim = claimStatus(settings);
+  const showClaim =
+    !!claim && claim.earned && !claim.claimed && claim.breaks > claimLaterAt &&
+    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder;
+  const claimBuddy = (): void => {
+    if (!claim) return;
+    const { skin, name } = claim.festival.festival;
+    handleSaveSettings({ claimedSkins: [...(settings.claimedSkins ?? []), skin] });
+    setClickedDialogue(`It's yours! 🎁\nWear the ${name} buddy any time from Settings.`);
+  };
+
+  // Asked once, in a calm moment after a few completed breaks.
+  const showReviewAsk =
+    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !showClaim &&
+    settings.reviewAskAt >= 0 && (settings.lifetimeBreaksCompleted ?? 0) >= settings.reviewAskAt;
+  const answerReviewAsk = (answer: 'yes' | 'later' | 'never'): void => {
+    if (answer === 'yes') window.open(STORE_REVIEW_URL || GITHUB_URL, '_blank', 'noopener');
+    handleSaveSettings({ reviewAskAt: answer === 'later' ? (settings.lifetimeBreaksCompleted ?? 0) + 10 : -1 });
+  };
+
   // Determine if dialogue speech bubble should be shown
   const showSpeechBubble = 
     stateData.state === 'POPUP' || 
     stateData.state === 'BREAK' || 
     stateData.state === 'IDLE' || 
     showHydrationReminder ||
+    showClaim ||
+    showReviewAsk ||
     clickedDialogue !== null;
 
   return (
@@ -366,12 +425,17 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
               state={stateData.state} 
               skipsCount={stateData.skipsCount} 
               workDuration={settings.workDuration}
-              tip={currentTip}
+              tip={breakStep ? breakStep.step.text : currentTip}
+              breakTitle={breakStep?.routine.title}
               customDialogue={
                 clickedDialogue || 
                 (showHydrationReminder
                   ? `Hey ${settings.userName || 'there'}!\nTime for a water break! 💧\nStay hydrated to keep focused.` 
-                  : null)
+                  : showClaim && claim
+                    ? `You earned the ${claim.festival.festival.name} buddy! ${claim.festival.festival.emoji}\nClaim it to keep it, even after the festival.`
+                    : showReviewAsk
+                      ? `We've taken ${settings.lifetimeBreaksCompleted} breaks together! 🎉\n${STORE_REVIEW_URL ? 'A quick rating' : 'A GitHub star'} would really help me find new friends.`
+                      : null)
               }
               userName={settings.userName}
               onMouseDown={handleMouseDown}
@@ -443,6 +507,40 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                 </div>
               )}
 
+              {showClaim && claim && (
+                <div className="action-buttons non-draggable">
+                  <button className="btn btn-primary" onClick={claimBuddy}>
+                    Claim it 🎁
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setClaimLaterAt(claim.breaks)}>
+                    Later
+                  </button>
+                </div>
+              )}
+
+              {showReviewAsk && (
+                <div className="action-buttons non-draggable">
+                  <button className="btn btn-primary" onClick={() => answerReviewAsk('yes')}>
+                    {STORE_REVIEW_URL ? 'Rate ⭐' : 'Star ⭐'}
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => answerReviewAsk('later')}>
+                    Later
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => answerReviewAsk('never')}>
+                    Never
+                  </button>
+                </div>
+              )}
+
+              {/* Guided routine progress */}
+              {breakStep && !clickedDialogue && (
+                <div className="routine-steps" aria-label={`Step ${breakStep.index + 1} of ${breakStep.routine.steps.length}`}>
+                  {breakStep.routine.steps.map((_, i) => (
+                    <span key={i} className={i < breakStep.index ? 'done' : i === breakStep.index ? 'active' : ''} />
+                  ))}
+                </div>
+              )}
+
               {/* Break countdown timer */}
               {stateData.state === 'BREAK' && !clickedDialogue && (
                 <Timer 
@@ -488,9 +586,10 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
             <Buddy 
               state={stateData.state} 
               customVideoPath={settings.customVideoPath}
+              defaultSrc={avatarSrc(resolveAvatarSkin(settings.avatarSkin, new Date(), settings.claimedSkins))}
               keyingMode={settings.keyingMode}
               debugKeyer={settings.debugKeyer}
-              clickAnimClass={clickAnimClass}
+              clickAnimClass={clickAnimClass || (breakStep && !clickedDialogue ? `buddy-motion-${breakStep.step.motion}` : '')}
               onMouseDown={handleMouseDown}
               onFileDrop={handleFileDrop}
             />

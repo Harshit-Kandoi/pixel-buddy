@@ -1,12 +1,29 @@
 name: Build desktop release
+# Runs three ways: called by "Release on merge" for every release (published straight away),
+# on a hand-pushed v* tag (creates a draft to publish yourself), or by hand to build test
+# artifacts without a release.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to build, e.g. v1.2.0"
+        type: string
+        required: true
+      publish:
+        description: "Publish the release instead of leaving a draft"
+        type: boolean
+        default: false
+      notes:
+        description: "What's new, in Markdown, shown above the standard release notes"
+        type: string
+        default: ""
 permissions:
   contents: read
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: desktop-release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 jobs:
   build:
@@ -37,6 +54,8 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -45,11 +64,12 @@ jobs:
         shell: bash
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
+          RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
         run: |
           node <<'NODE'
           const p = require('./package.json');
           const l = require('./package-lock.json');
-          const ref = process.env.GITHUB_REF_NAME;
+          const ref = process.env.RELEASE_TAG || process.env.GITHUB_REF_NAME;
           const rootVersion = l.packages?.['']?.version;
           console.log(`Ref: ${ref}; package: ${p.version}; lockfile: ${l.version}; lockfile root: ${rootVersion}; runner: ${process.arch}`);
           function fail(message) {
@@ -59,7 +79,7 @@ jobs:
           if (p.version !== l.version || p.version !== rootVersion) {
             fail(`Package version ${p.version} does not match lockfile versions ${l.version}/${rootVersion}. Update and commit both package files before tagging.`);
           }
-          if (process.env.GITHUB_REF_TYPE === 'tag' && `v${p.version}` !== ref) {
+          if (process.env.RELEASE_TAG && `v${p.version}` !== ref) {
             fail(`Tag ${ref} points to package version ${p.version}; expected v${p.version}. Commit the version update before creating a new release tag. Re-running this tag uses the same mismatched commit.`);
           }
           if (process.arch !== process.env.EXPECTED_ARCH) {
@@ -121,7 +141,7 @@ jobs:
           retention-days: 3
           compression-level: 0
   draft-release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: ${{ inputs.tag || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) }}
     needs: build
     runs-on: ubuntu-22.04
     timeout-minutes: 10
@@ -129,6 +149,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -147,10 +169,18 @@ jobs:
           done
           node scripts/release-checksums.mjs installers --all
           (cd installers && sha256sum --check SHA256SUMS)
-      - name: Create draft release
+      - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          PUBLISH: ${{ inputs.publish && 'true' || 'false' }}
+          NOTES: ${{ inputs.notes }}
         run: |
-          gh release create "$RELEASE_TAG" installers/* --verify-tag --draft --title "Pixel Buddy $RELEASE_TAG" --notes-file docs/release-notes.md
+          if [ -n "$NOTES" ]; then printf '%s\n\n' "$NOTES" > release-notes.md; else : > release-notes.md; fi
+          cat docs/release-notes.md >> release-notes.md
+          if [ "$PUBLISH" = "true" ]; then
+            gh release create "$RELEASE_TAG" installers/* --verify-tag --latest --title "Pixel Buddy $RELEASE_TAG" --notes-file release-notes.md
+          else
+            gh release create "$RELEASE_TAG" installers/* --verify-tag --draft --title "Pixel Buddy $RELEASE_TAG" --notes-file release-notes.md
+          fi

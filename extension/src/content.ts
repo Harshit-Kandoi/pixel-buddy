@@ -51,6 +51,7 @@ function mount(): void {
   frame.src = chrome.runtime.getURL('page.html');
   frame.title = 'Pixel Buddy';
   frame.setAttribute('allowtransparency', 'true');
+  frame.allow = 'clipboard-write'; // lets "Copy image" on the share card work inside the frame
   visible = interactive = false;
   hitRects = [];
   render();

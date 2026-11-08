@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 250" fill="none">
+<style>
+.twinkle{animation:twinkle 2.4s ease-in-out infinite}.late{animation-delay:1.2s}
+.flame{animation:flicker .9s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 100%}
+.glow{animation:glow 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 50%}
+.bob{animation:bob 3s ease-in-out infinite}
+.fall{animation:fall 3s linear infinite}
+@keyframes twinkle{50%{opacity:.25}}
+@keyframes flicker{to{transform:scale(.9,1.08) rotate(3deg)}}
+@keyframes glow{50%{opacity:.15;transform:scale(.85)}}
+@keyframes bob{50%{transform:translate(-3px,4px) rotate(-3deg)}}.bob.late{animation-delay:-1.5s}
+@keyframes fall{0%{transform:translateY(-4px);opacity:0}20%{opacity:1}100%{transform:translateY(14px);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<ellipse cx="120" cy="226" rx="70" ry="12" fill="#1d1140" opacity=".12"/>
+<path d="M85 180v35h-28v-20h14v-21m84 6v35h28v-20h-14v-21" fill="#3b2a8c" stroke="#1d1140" stroke-width="6" stroke-linejoin="round"/>
+<path d="M47 112H27v57h22m144-57h20v57h-22" fill="#6f4ee8" stroke="#1d1140" stroke-width="6"/>
+<path d="M58 62h124v17h18v96h-18v17H58v-17H40V79h18V62Z" fill="#8b6cff" stroke="#1d1140" stroke-width="6" stroke-linejoin="round"/>
+<path d="M60 84h120v65H60z" fill="#f1edff" stroke="#1d1140" stroke-width="6"/>
+<path d="M76 117c4-9 14-9 18 0m52 0c4-9 14-9 18 0" stroke="#1d1140" stroke-width="6" stroke-linecap="round"/>
+<path d="M106 126c4 9 24 9 28 0" stroke="#1d1140" stroke-width="6" stroke-linecap="round"/>
+<circle cx="73" cy="132" r="6" fill="#ff8fc8" opacity=".75"/><circle cx="167" cy="132" r="6" fill="#ff8fc8" opacity=".75"/>
+<path d="M83 162h73" stroke="#5a3fd1" stroke-width="6"/>
+<defs><clipPath id="hat"><path d="M92 66 124 6l30 60Z"/></clipPath></defs>
+<path d="M92 66 124 6l30 60Z" fill="#ffd23f"/>
+<g clip-path="url(#hat)" stroke="#ff5fa2" stroke-width="9"><path d="M80 60l80-20M80 36l80-20M80 84l80-20"/></g>
+<path d="M92 66 124 6l30 60Z" stroke="#1d1140" stroke-width="5" stroke-linejoin="round"/>
+<circle cx="124" cy="7" r="9" fill="#4cc9f0" stroke="#1d1140" stroke-width="4"/>
+<path d="M214 166 222 124" stroke="#1d1140" stroke-width="4" stroke-linecap="round"/>
+<path class="twinkle" d="M222 105l4.55 8.45 8.45 4.55-8.45 4.55-4.55 8.45-4.55-8.45-8.45-4.55 8.45-4.55Z" fill="#ffd23f"/>
+<path class="twinkle late" d="M222 112l2.0999999999999996 3.9000000000000004 3.9000000000000004 2.0999999999999996-3.9000000000000004 2.0999999999999996-2.0999999999999996 3.9000000000000004-2.0999999999999996-3.9000000000000004-3.9000000000000004-2.0999999999999996 3.9000000000000004-2.0999999999999996Z" fill="#fff8d6"/>
+<rect class="fall" x="20" y="30" width="8" height="4" rx="1" fill="#ff5fa2" transform="rotate(-45 24 32)"/>
+<rect class="fall late" x="44" y="56" width="8" height="4" rx="1" fill="#4cc9f0" transform="rotate(-8 48 58)"/>
+<rect class="fall" x="196" y="28" width="8" height="4" rx="1" fill="#ffd23f" transform="rotate(29 200 30)"/>
+<rect class="fall late" x="210" y="62" width="8" height="4" rx="1" fill="#2ec4b6" transform="rotate(-24 214 64)"/>
+<rect class="fall" x="14" y="86" width="8" height="4" rx="1" fill="#ff8c42" transform="rotate(13 18 88)"/>
+<rect class="fall late" x="60" y="18" width="8" height="4" rx="1" fill="#ff5fa2" transform="rotate(-40 64 20)"/>
+<rect class="fall" x="180" y="8" width="8" height="4" rx="1" fill="#4cc9f0" transform="rotate(-3 184 10)"/>
+<rect class="fall late" x="30" y="140" width="8" height="4" rx="1" fill="#ffd23f" transform="rotate(34 34 142)"/>
+</svg>
