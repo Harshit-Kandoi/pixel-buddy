@@ -1,0 +1,115 @@
+name: Release on merge
+# Every merge to main that changes the app or extension ships a new v1.x.y:
+#   1. tests, then bump the version (package.json, package-lock.json, extension manifest),
+#      commit it to main and tag it,
+#   2. build, smoke-test and publish the desktop installers as a GitHub release,
+#   3. dry-run the Chrome extension and attach its store zip to that release.
+# Patch by default; minor when a commit starts with "feat" or says [minor]; add
+# [skip release] to a commit message to skip. Website and docs changes don't release
+# (the website deploys through its own workflow).
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "website/**"
+      - "docs/**"
+      - "**/*.md"
+      - "extension/store-assets/**"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        type: choice
+        options: [auto, patch, minor]
+        default: auto
+permissions:
+  contents: read
+concurrency:
+  # One release at a time; a merge that lands mid-release waits its turn.
+  group: release-on-merge
+  cancel-in-progress: false
+jobs:
+  version:
+    # Standard hosted runners are free for public repositories. Avoid private-repo charges.
+    if: github.event.repository.private == false && !contains(github.event.head_commit.message, '[skip release]')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
+      notes: ${{ steps.notes.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags and history, to find the last release
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      # Unit tests only need the JavaScript dependencies, not Electron's native rebuild.
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run typecheck
+      - name: Bump the version
+        id: next
+        run: node scripts/next-version.mjs --apply --bump "${{ inputs.bump || 'auto' }}"
+      - name: Read release notes
+        id: notes
+        run: |
+          {
+            echo "notes<<RELEASE_NOTES_EOF"
+            cat release-notes.generated.md
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+          rm release-notes.generated.md
+      - name: Commit and tag the release
+        env:
+          TAG: ${{ steps.next.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(release): ${TAG} [skip release]"
+          git tag "$TAG"
+          # Atomic: the version commit and its tag land together or not at all. Pushes made
+          # with the workflow token don't start other workflows, so this can't loop.
+          git push --atomic origin HEAD:main "$TAG"
+
+  desktop:
+    needs: version
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      publish: true
+      notes: ${{ needs.version.outputs.notes }}
+    permissions:
+      contents: write
+
+  extension:
+    needs: [version, desktop]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # The real extension in a throwaway headless Chrome (preinstalled on the runner).
+      - name: Dry-run the extension
+        run: npm run ext:test -- --quick
+      - run: npm run ext:zip
+      - name: Attach the store zip to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: gh release upload "$TAG" "release/pixel-buddy-extension-${VERSION}.zip"

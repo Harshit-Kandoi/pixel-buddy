@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import buddyMascot from '../assets/buddy.svg';
 import { toMediaUrl } from '../../../utils/mediaUrl';
+import { isImageFile } from '../../../utils/mediaFormats';
 
 interface BuddyProps {
   state: string;
@@ -162,7 +163,7 @@ export const Buddy: React.FC<BuddyProps> = ({
   const rafRef = useRef<number>(0);
 
   const mediaSrc = customVideoPath ? toMediaUrl(customVideoPath) : defaultSrc;
-  const isImage = !customVideoPath || /\.(gif|png|webp|apng)$/i.test(customVideoPath);
+  const isImage = !customVideoPath || isImageFile(customVideoPath);
 
   // Animation class goes on the wrapper div, NOT the media element
   // This prevents GIFs from rotating/distorting on click

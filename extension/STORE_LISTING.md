@@ -97,10 +97,13 @@ Live at https://chromewebstore.google.com/detail/pixel-buddy/ikggibbkgbebflafmla
 
 ## Releasing an update
 
-1. Bump `"version"` in `extension/public/manifest.json`.
-2. Run `npm run ext:test` and check every line passes.
-3. Run `npm run ext:zip`.
-4. Dashboard → Pixel Buddy → **Package** → **Upload new package** → **Submit for review**.
+Merging to `main` builds, tests, and versions the extension automatically, and attaches `pixel-buddy-extension-<version>.zip` to that version's [GitHub release](https://github.com/Harshit-Kandoi/pixel-buddy/releases). Then:
+
+1. Download the zip from the release.
+2. Dashboard → Pixel Buddy → **Package** → **Upload new package** → choose the zip → **Submit for review**.
+3. If the release changed what the listing shows, update the description and screenshots too (`npm run ext:screenshots` regenerates them).
+
+To build the zip by hand instead: bump `"version"` in `extension/public/manifest.json`, run `npm run ext:test`, then `npm run ext:zip`; the zip is in `release/`.
 
 ## Microsoft Edge Add-ons
 

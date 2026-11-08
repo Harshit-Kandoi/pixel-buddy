@@ -1644,3 +1644,14 @@ html.buddy-top .thinking-tail { bottom: auto; top: -20px; transform: scaleY(-1);
 .media-card-locked .media-card-thumb { display: flex; align-items: center; justify-content: center; border: 1px dashed rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.03); }
 .media-card-lock { font-size: 22px; filter: grayscale(0.3); }
 .media-card-sub { font-size: 10px; color: #94a3b8; text-align: center; padding: 0 4px 6px; margin-top: -4px; }
+
+/* "Which format?" guide under the avatar picker: shown on hover or keyboard focus */
+.format-tip { color: hsl(var(--theme-hue), 60%, 70%); border-bottom: 1px dotted currentColor; cursor: help; white-space: nowrap; outline: none; }
+.format-tip:focus-visible { border-bottom-style: solid; }
+.format-guide { display: none; margin: 6px 0 4px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); }
+.setting-help:has(.format-tip:hover, .format-tip:focus) + .format-guide, .format-guide:hover { display: block; }
+.format-guide p { margin: 0 0 7px; font-size: 11px; line-height: 1.45; color: #cbd5e1; }
+.format-guide p:last-child { margin-bottom: 0; }
+.format-guide b { color: #f1f5f9; }
+.format-guide-formats { color: #94a3b8; font-size: 10px; }
+.format-hint { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: rgba(250, 204, 21, 0.08); border: 1px solid rgba(250, 204, 21, 0.2); font-size: 11px; line-height: 1.45; color: #fde68a; }

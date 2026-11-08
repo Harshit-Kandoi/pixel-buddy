@@ -12,6 +12,9 @@ Keep the repository **public**: GitHub's standard hosted runners are free for pu
 
 ## 2. Build a release
 
+**Normally this is automatic.** Every merge to `main` that changes the app or extension runs `.github/workflows/release-on-merge.yml`: it bumps the version (patch, or minor for `feat:` / `[minor]` commits), commits and tags it, builds and smoke-tests the installers with the workflow below, publishes the release, and attaches the Chrome extension zip. See the README's Releases section for the rules and the one-time repository setup. The rest of this section is the manual path, for a hand-picked version or a release outside the v1 series.
+
+
 Keep the version in `package.json` and `package-lock.json` synchronized. The tag must equal `v` followed by the version **in the tagged commit**; the workflow validates both files and the tag. Changing only the tag name does not update the application's version.
 
 For each new release, choose an unused version and update both files before committing. For example:

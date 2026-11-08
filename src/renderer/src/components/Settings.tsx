@@ -3,6 +3,7 @@ import { AppSettings } from '../../../utils/types';
 import { toMediaUrl } from '../../../utils/mediaUrl';
 import { AVATAR_SKINS } from '../avatars';
 import { drawShareCard, downloadBlob } from '../shareCard';
+import { FORMAT_GUIDE, SUPPORTED_FORMATS_TEXT, formatHint, isImageFile, mediaTypeLabel } from '../../../utils/mediaFormats';
 import { CLAIM_BREAKS, FESTIVALS, claimStatus, upcomingFestivals, resolveAvatarSkin, type AvatarSkin, type FestivalSkin } from '../../../utils/seasons';
 
 interface SettingsProps {
@@ -18,14 +19,6 @@ function getFilename(p: string): string {
   return file.replace(/\.[^.]+$/, '').replace(/^custom_buddy_\d+(__)?/, '');
 }
 
-// Get media extension for label
-function getMediaTypeLabel(p: string): string {
-  const ext = p.split('.').pop()?.toLowerCase() ?? '';
-  if (['gif', 'apng'].includes(ext)) return 'GIF';
-  if (['mp4', 'webm'].includes(ext)) return 'Video';
-  if (['png', 'webp'].includes(ext)) return 'Image';
-  return ext.toUpperCase();
-}
 
 export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, onHeaderMouseDown }) => {
   const [workDuration, setWorkDuration] = useState(settings.workDuration);
@@ -478,15 +471,15 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                       tabIndex={0}
                       className={`media-card ${isActive ? 'media-card-active' : ''}`}
                       onClick={() => handleSelectLibraryItem(p)}
-                      title={name}
+                      title={formatHint(p) ? `${name}\n${formatHint(p)}` : name}
                     >
                       <div className="media-card-thumb">
-                        {/\.(gif|png|webp|apng)$/i.test(p) ? (
+                        {isImageFile(p) ? (
                           <img src={toMediaUrl(p)} alt={name} className="media-card-preview" />
                         ) : (
                           <video src={toMediaUrl(p)} className="media-card-preview" muted loop autoPlay playsInline />
                         )}
-                        <span className="media-card-ext">{getMediaTypeLabel(p)}</span>
+                        <span className="media-card-ext">{mediaTypeLabel(p)}</span>
                         {isActive && <div className="media-card-check">✓</div>}
                         <button
                           type="button"
@@ -507,7 +500,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   type="button"
                   className="media-card media-card-add non-draggable"
                   onClick={handleSelectMedia}
-                  title="Add a GIF, PNG, WebP, MP4 or WebM"
+                  title={`Add a ${SUPPORTED_FORMATS_TEXT}\n\n${FORMAT_GUIDE.map((g) => `${g.title} (${g.formats}): ${g.text}`).join('\n')}`}
                 >
                   <div className="media-card-thumb">
                     <span className="media-card-add-icon">+</span>
@@ -515,7 +508,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   <div className="media-card-label">Add avatar</div>
                 </button>
               </div>
-              <p className="setting-help">Drop a GIF, PNG, WebP or a green-screen MP4/WebM here or on the buddy.</p>
+              <p className="setting-help">
+                Drop a {SUPPORTED_FORMATS_TEXT} here or on the buddy.{' '}
+                <span className="format-tip" tabIndex={0} aria-describedby="format-guide">Which format? ⓘ</span>
+              </p>
+              <div id="format-guide" className="format-guide" role="tooltip">
+                {FORMAT_GUIDE.map((g) => (
+                  <p key={g.title}><b>{g.title}</b> <span className="format-guide-formats">{g.formats}</span><br />{g.text}</p>
+                ))}
+              </div>
+              {customVideoPath && formatHint(customVideoPath) && <p className="format-hint">💡 {formatHint(customVideoPath)}</p>}
               <div className="switch-row" style={{ marginTop: '10px' }}>
                 <div className="switch-label-group">
                   <span className="switch-label">Dress up for festivals</span>

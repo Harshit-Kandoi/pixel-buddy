@@ -23,6 +23,7 @@ import type { BuddyAnchor } from '../utils/types';
 import { ActivityMonitor } from './activity';
 import { Scheduler } from './scheduler';
 import { TrayManager } from './tray';
+import { MEDIA_EXTENSIONS, isMediaFile } from '../utils/mediaFormats';
 
 let mainWindow: BrowserWindow | null = null;
 let settingsManager: SettingsManager;
@@ -405,9 +406,9 @@ app.whenReady().then(() => {
   // Custom Media Selection via standalone file chooser
   ipcMain.handle('media:select', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
-      title: 'Select Companion Video or GIF',
+      title: 'Select a picture, GIF or video for your buddy',
       filters: [
-        { name: 'Media Files', extensions: ['mp4', 'webm', 'gif', 'png', 'webp', 'apng'] }
+        { name: 'Images, GIFs and videos', extensions: MEDIA_EXTENSIONS }
       ],
       properties: ['openFile']
     });
@@ -603,7 +604,7 @@ function resizeAnchored(win: BrowserWindow, width: number, height: number): void
 
 // Helper: copy a media file into the app's userData/media directory
 async function copyMediaToLibrary(sourcePath: string): Promise<string> {
-  if (typeof sourcePath !== 'string' || !/\.(mp4|webm|gif|png|webp|apng)$/i.test(sourcePath)) {
+  if (typeof sourcePath !== 'string' || !isMediaFile(sourcePath)) {
     throw new Error('Unsupported companion media');
   }
   const userDataPath = app.getPath('userData');
