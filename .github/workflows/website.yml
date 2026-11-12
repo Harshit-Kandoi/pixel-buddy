@@ -13,6 +13,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   deploy:
+    # Only the original repository publishes the website. Forks copy this workflow, but they
+    # have no GitHub Pages set up, so the deploy would fail and email the fork's owner.
+    if: github.repository == 'Harshit-Kandoi/pixel-buddy'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

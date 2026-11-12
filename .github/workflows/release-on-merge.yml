@@ -32,8 +32,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   version:
-    # Standard hosted runners are free for public repositories. Avoid private-repo charges.
-    if: github.event.repository.private == false && !contains(github.event.head_commit.message, '[skip release]')
+    # Only the original repository releases (forks copy this workflow; a fork's main must not
+    # tag and publish releases). Standard runners are free for public repositories only.
+    if: github.repository == 'Harshit-Kandoi/pixel-buddy' && github.event.repository.private == false && !contains(github.event.head_commit.message, '[skip release]')
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
