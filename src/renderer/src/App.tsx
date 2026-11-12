@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Buddy } from './components/Buddy';
 import { SpeechBubble } from './components/SpeechBubble';
 import { Timer } from './components/Timer';
@@ -8,10 +8,17 @@ import { AppSettings, BuddyAnchor, StateMachineData } from '../../utils/types';
 import { getRandomTip, getRandomBuddyLine, FESTIVE_LINES } from '../../utils/quotes';
 import { CLAIM_BREAKS, claimStatus, resolveAvatarSkin } from '../../utils/seasons';
 import { avatarSrc } from './avatars';
+import { isImageFile } from '../../utils/mediaFormats';
 import { routineForBreak, stepAt } from '../../utils/breakRoutines';
 import { CHROME_REVIEW_URL, EDGE_ADDONS_URL, GITHUB_URL } from '../../utils/links';
 
 const IN_EXTENSION = location.protocol === 'chrome-extension:';
+// Battery: after this long with nothing happening the buddy rests (no endless float, festival
+// outfits hold still). Reminders, breaks, clicks, hovering and settings wake it. While resting
+// it still gives one gentle bob now and then, so it doesn't look frozen.
+const REST_AFTER_MS = 20000;
+const BOB_EVERY_MS = 45000;
+const BOB_MS = 2400;
 const IS_EDGE = /\bEdg\//.test(navigator.userAgent);
 // Where "Rate" goes: the store this copy most likely came from (Edge users can install from the
 // Chrome Web Store until the Edge listing exists); the desktop app asks for a GitHub star instead.
@@ -59,6 +66,11 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const [isDismissed, setIsDismissed] = useState(false);
   const [claimLaterAt, setClaimLaterAt] = useState(-1); // "Later" on the claim prompt waits for the next break
   const lastFestivalBreaks = useRef<number | null>(null);
+  const [onBattery, setOnBattery] = useState(false);
+  const [batteryTipDismissed, setBatteryTipDismissed] = useState(false);
+  const [resting, setResting] = useState(false);
+  const [bobbing, setBobbing] = useState(false);
+  const lastLivelyRef = useRef(0); // set by the wake effect on mount
 
   // Drag and click tracking refs
   const dragThreshold = 5;
@@ -228,6 +240,63 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
       if (whileOpen) clearInterval(whileOpen);
     };
   }, [showSettings]);
+
+  // Battery power (desktop): a video avatar is the heaviest choice, so suggest a lighter one.
+  useEffect(() => {
+    window.api.isOnBattery().then(setOnBattery).catch(() => {});
+    return window.api.onPowerChange((battery) => {
+      setOnBattery(battery);
+      if (!battery) setBatteryTipDismissed(false); // ask again next time it's unplugged
+    });
+  }, []);
+
+  // Resting: wake on anything that matters, rest after REST_AFTER_MS of nothing happening.
+  const wake = useCallback((): void => {
+    lastLivelyRef.current = Date.now();
+    setResting(false);
+  }, []);
+  useEffect(() => {
+    lastLivelyRef.current = Date.now();
+    const id = setTimeout(wake, 0); // wake on the next tick, not mid-render
+    return () => clearTimeout(id);
+  }, [stateData?.state, stateData?.hydrationReminderActive, clickedDialogue, showSettings, showWidgets, isDismissed, wake]);
+  useEffect(() => {
+    let last = 0;
+    // Only the buddy's own UI counts: on desktop the transparent window also gets mouse moves
+    // while you work in the app underneath it, and those shouldn't keep the buddy awake.
+    const onPointer = (e: PointerEvent): void => {
+      if (!(e.target as Element | null)?.closest?.(HIT_SELECTOR + ', .settings-panel')) return;
+      if (Date.now() - last < 500) return;
+      last = Date.now();
+      wake();
+    };
+    window.addEventListener('pointermove', onPointer, { passive: true });
+    window.addEventListener('pointerdown', onPointer, { passive: true });
+    const check = setInterval(() => {
+      const state = stateDataRef.current?.state;
+      // Reminders and breaks stay lively; everything else may rest.
+      if (state === 'POPUP' || state === 'BREAK') lastLivelyRef.current = Date.now();
+      else if (Date.now() - lastLivelyRef.current > REST_AFTER_MS) setResting(true);
+    }, 2000);
+    return () => {
+      window.removeEventListener('pointermove', onPointer);
+      window.removeEventListener('pointerdown', onPointer);
+      clearInterval(check);
+    };
+  }, [wake]);
+  useEffect(() => {
+    if (!resting) return;
+    let stop: ReturnType<typeof setTimeout> | undefined;
+    const bob = setInterval(() => {
+      setBobbing(true);
+      stop = setTimeout(() => setBobbing(false), BOB_MS);
+    }, BOB_EVERY_MS);
+    return () => {
+      clearInterval(bob);
+      clearTimeout(stop);
+      setBobbing(false);
+    };
+  }, [resting]);
 
   // Sync UI Color Theme Hue (CSS variable)
   useEffect(() => {
@@ -409,9 +478,14 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     setClickedDialogue(`It's yours! 🎁\nWear the ${name} buddy any time from Settings.`);
   };
 
+  const usingVideo = !!settings.customVideoPath && !isImageFile(settings.customVideoPath);
+  const showBatteryTip =
+    onBattery && usingVideo && !batteryTipDismissed &&
+    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !showClaim;
+
   // Asked once, in a calm moment after a few completed breaks.
   const showReviewAsk =
-    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !showClaim &&
+    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !showClaim && !showBatteryTip &&
     settings.reviewAskAt >= 0 && (settings.lifetimeBreaksCompleted ?? 0) >= settings.reviewAskAt;
   const answerReviewAsk = (answer: 'yes' | 'later' | 'never'): void => {
     if (answer === 'yes') window.open(STORE_REVIEW_URL || GITHUB_URL, '_blank', 'noopener');
@@ -425,6 +499,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     stateData.state === 'IDLE' || 
     showHydrationReminder ||
     showClaim ||
+    showBatteryTip ||
     showReviewAsk ||
     clickedDialogue !== null;
 
@@ -451,6 +526,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                 clickedDialogue || 
                 (showHydrationReminder
                   ? `Hey ${settings.userName || 'there'}!\nTime for a water break! 💧\nStay hydrated to keep focused.` 
+                  : showBatteryTip
+                    ? `On battery 🔋\nVideo avatars use the most energy. A picture, a GIF or the classic buddy lasts longer.`
                   : showClaim && claim
                     ? `You earned the ${claim.festival.festival.name} buddy! ${claim.festival.festival.emoji}\nClaim it to keep it, even after the festival.`
                     : showReviewAsk
@@ -523,6 +600,17 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                     onClick={() => window.api.dismissHydration()}
                   >
                     Dismiss
+                  </button>
+                </div>
+              )}
+
+              {showBatteryTip && (
+                <div className="action-buttons non-draggable">
+                  <button className="btn btn-primary" onClick={() => handleSaveSettings({ customVideoPath: null })}>
+                    Use classic buddy
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setBatteryTipDismissed(true)}>
+                    Keep video
                   </button>
                 </div>
               )}
@@ -606,10 +694,11 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
             <Buddy 
               state={stateData.state} 
               customVideoPath={settings.customVideoPath}
-              defaultSrc={avatarSrc(resolveAvatarSkin(settings.avatarSkin, new Date(), settings.claimedSkins))}
+              defaultSrc={avatarSrc(resolveAvatarSkin(settings.avatarSkin, new Date(), settings.claimedSkins), resting && !bobbing)}
+              resting={resting}
               keyingMode={settings.keyingMode}
               debugKeyer={settings.debugKeyer}
-              clickAnimClass={clickAnimClass || (breakStep && !clickedDialogue ? `buddy-motion-${breakStep.step.motion}` : '')}
+              clickAnimClass={clickAnimClass || (breakStep && !clickedDialogue ? `buddy-motion-${breakStep.step.motion}` : '') || (bobbing ? 'buddy-bob' : '')}
               onMouseDown={handleMouseDown}
               onFileDrop={handleFileDrop}
             />

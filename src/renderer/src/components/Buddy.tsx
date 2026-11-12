@@ -13,6 +13,8 @@ interface BuddyProps {
   onMouseDown?: (e: React.MouseEvent) => void;
   clickAnimClass?: string;
   onFileDrop?: (filePath: string) => void;
+  /** Idle: hold still instead of floating forever (saves battery). */
+  resting?: boolean;
 }
 
 // ─── WebGL Shader Sources ────────────────────────────────────────────────────
@@ -153,6 +155,7 @@ export const Buddy: React.FC<BuddyProps> = ({
   onMouseDown,
   clickAnimClass = '',
   onFileDrop,
+  resting = false,
 }) => {
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -161,15 +164,46 @@ export const Buddy: React.FC<BuddyProps> = ({
   const bgRef = useRef<[number, number, number]>([0, 0.7, 0.25]);
   const bgTickRef = useRef(0);
   const rafRef = useRef<number>(0);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [frozenSrc, setFrozenSrc] = useState<string | null>(null);
 
   const mediaSrc = customVideoPath ? toMediaUrl(customVideoPath) : defaultSrc;
   const isImage = !customVideoPath || isImageFile(customVideoPath);
 
   // Animation class goes on the wrapper div, NOT the media element
   // This prevents GIFs from rotating/distorting on click
-  let containerAnim = 'buddy-bounce';
+  let containerAnim = resting ? 'buddy-resting' : 'buddy-bounce';
   if (state === 'POPUP') containerAnim = 'buddy-walk-in';
   if (clickAnimClass) containerAnim = clickAnimClass;
+
+  // Resting: pause video avatars (the keyer only runs on new frames, so it stops too) and
+  // hold animated GIF/WebP avatars on their current frame. Waking resumes both.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      if (resting) video.pause();
+      else video.play().catch(() => {});
+    }
+    // Update the frozen frame on the next tick rather than mid-render.
+    const id = setTimeout(() => {
+      const img = imgRef.current;
+      if (!resting || !customVideoPath || !/\.(gif|apng|webp)$/i.test(customVideoPath) || !img?.complete || !img.naturalWidth) {
+        setFrozenSrc(null);
+        return;
+      }
+      try {
+        const scale = Math.min(1, 320 / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setFrozenSrc(canvas.toDataURL());
+      } catch {
+        setFrozenSrc(null); // can't read the pixels: keep it animating
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  }, [resting, customVideoPath, isImage]);
 
   // Re-init when source or keying mode changes
   useEffect(() => {
@@ -193,8 +227,14 @@ export const Buddy: React.FC<BuddyProps> = ({
       if (!gls) console.warn('WebGL not available — falling back to 2D canvas chroma key');
     }
 
+    // Key a frame only when the video has a new one (24–30 a second for most clips) instead of
+    // on every screen refresh; fall back to animation frames where that API is missing.
+    const withFrames = typeof video.requestVideoFrameCallback === 'function';
+    const schedule = (): void => {
+      rafRef.current = withFrames ? video.requestVideoFrameCallback(draw) : requestAnimationFrame(draw);
+    };
     const draw = () => {
-      rafRef.current = requestAnimationFrame(draw);
+      schedule();
 
       if (!video || video.readyState < 2) return; // video not decoded yet
 
@@ -268,10 +308,11 @@ export const Buddy: React.FC<BuddyProps> = ({
     };
 
     video.play().catch((e) => console.warn('Video play interrupted:', e));
-    rafRef.current = requestAnimationFrame(draw);
+    schedule();
 
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      if (withFrames) video.cancelVideoFrameCallback(rafRef.current);
+      else cancelAnimationFrame(rafRef.current);
     };
   }, [isImage, videoError, mediaSrc, keyingMode, debugKeyer]);
 
@@ -354,7 +395,9 @@ export const Buddy: React.FC<BuddyProps> = ({
       {!videoError ? (
         isImage ? (
           <img
-            src={mediaSrc}
+            ref={imgRef}
+            src={frozenSrc ?? mediaSrc}
+            crossOrigin={customVideoPath ? 'anonymous' : undefined}
             draggable={false}
             className="buddy-media"
             style={mediaCss}

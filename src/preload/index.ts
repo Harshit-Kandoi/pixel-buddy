@@ -44,6 +44,12 @@ const api = {
     return () => ipcRenderer.removeListener('window:show-settings', subscription)
   },
   setSettingsVisible: (visible) => ipcRenderer.send('window:settings-visibility', visible),
+  isOnBattery: () => ipcRenderer.invoke('power:on-battery'),
+  onPowerChange: (callback) => {
+    const subscription = (_: unknown, onBattery: boolean): void => callback(onBattery)
+    ipcRenderer.on('power:changed', subscription)
+    return () => ipcRenderer.removeListener('power:changed', subscription)
+  },
   setHitRects: (rects) => ipcRenderer.send('window:hit-rects', rects),
   logHydration: () => ipcRenderer.send('scheduler:log-hydration'),
   snoozeHydration: () => ipcRenderer.send('scheduler:snooze-hydration'),

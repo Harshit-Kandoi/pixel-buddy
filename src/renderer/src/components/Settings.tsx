@@ -4,6 +4,7 @@ import { toMediaUrl } from '../../../utils/mediaUrl';
 import { AVATAR_SKINS } from '../avatars';
 import { drawShareCard, downloadBlob } from '../shareCard';
 import { FORMAT_GUIDE, SUPPORTED_FORMATS_TEXT, formatHint, isImageFile, mediaTypeLabel } from '../../../utils/mediaFormats';
+import { backgroundAdvice, classifyBackground, type BackgroundKind } from '../../../utils/backgroundCheck';
 import { CLAIM_BREAKS, FESTIVALS, claimStatus, upcomingFestivals, resolveAvatarSkin, type AvatarSkin, type FestivalSkin } from '../../../utils/seasons';
 
 interface SettingsProps {
@@ -126,6 +127,30 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
   };
 
   const [shareStatus, setShareStatus] = useState('');
+
+  // Is the chosen picture really see-through? (A drawn-in checkerboard or a solid background
+  // shows as a box.) Videos get the green-screen hint instead.
+  // Keyed by file, so switching avatars never shows the previous picture's result.
+  const [checked, setChecked] = useState<{ path: string; kind: BackgroundKind } | null>(null);
+  const backgroundKind = checked && checked.path === customVideoPath ? checked.kind : null;
+  useEffect(() => {
+    if (!customVideoPath || !isImageFile(customVideoPath)) return undefined;
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = toMediaUrl(customVideoPath);
+    img.decode().then(() => {
+      const scale = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = Object.assign(document.createElement('canvas'), { width: w, height: h }).getContext('2d');
+      if (!ctx || cancelled) return;
+      ctx.drawImage(img, 0, 0, w, h);
+      setChecked({ path: customVideoPath, kind: classifyBackground(ctx.getImageData(0, 0, w, h).data, w, h) });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [customVideoPath]);
+  const avatarTip = !customVideoPath ? null : isImageFile(customVideoPath) ? (backgroundKind && backgroundAdvice(backgroundKind)) : formatHint(customVideoPath);
   const handleShare = async (mode: 'download' | 'copy'): Promise<void> => {
     try {
       const blob = await drawShareCard(settings, shownSkin);
@@ -517,7 +542,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   <p key={g.title}><b>{g.title}</b> <span className="format-guide-formats">{g.formats}</span><br />{g.text}</p>
                 ))}
               </div>
-              {customVideoPath && formatHint(customVideoPath) && <p className="format-hint">💡 {formatHint(customVideoPath)}</p>}
+              {avatarTip && <p className="format-hint">💡 {avatarTip}</p>}
               <div className="switch-row" style={{ marginTop: '10px' }}>
                 <div className="switch-label-group">
                   <span className="switch-label">Dress up for festivals</span>

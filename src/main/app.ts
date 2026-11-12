@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, screen, protocol, dialog, net } from 'electron';
+import { app, shell, BrowserWindow, ipcMain, screen, protocol, dialog, net, powerMonitor } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
@@ -14,9 +14,11 @@ if (fs.existsSync(path.join(legacyUserData, 'settings.json'))) {
 // Suppress harmless Windows GPU shader cache permission errors in console
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
-// Register 'buddy-media' as standard, secure, and support fetch
+// Register 'buddy-media' as standard and secure. Videos need `stream` (they load in ranges)
+// and `corsEnabled`: the buddy's <video> is crossOrigin so the green-screen keyer may read
+// its pixels, which only works when the response carries CORS headers.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'buddy-media', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+  { scheme: 'buddy-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }
 ]);
 import { SettingsManager } from './settings';
 import type { BuddyAnchor } from '../utils/types';
@@ -161,7 +163,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   // Register media protocol to load local files
-  protocol.handle('buddy-media', (request) => {
+  protocol.handle('buddy-media', async (request) => {
     try {
       // URLs look like buddy-media://local/<encodeURIComponent(absolutePath)>
       const filePath = path.resolve(decodeURIComponent(new URL(request.url).pathname.slice(1)));
@@ -170,7 +172,11 @@ app.whenReady().then(() => {
       if (!allowed.some((dir) => filePath.startsWith(dir + path.sep)) || !fs.existsSync(filePath)) {
         return new Response('Not found', { status: 404 });
       }
-      return net.fetch(pathToFileURL(filePath).toString());
+      // Forward Range so videos can seek and stream, and allow the app's page to read the pixels.
+      const response = await net.fetch(pathToFileURL(filePath).toString(), { headers: request.headers });
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     } catch (err) {
       console.error('Failed to resolve buddy-media URL:', err);
       return new Response('Not found', { status: 404 });
@@ -402,6 +408,14 @@ app.whenReady().then(() => {
     }
   });
 
+  // Battery: the buddy suggests a lighter avatar than a video while on battery power.
+  ipcMain.handle('power:on-battery', () => powerMonitor.isOnBatteryPower());
+  const sendPower = (onBattery: boolean): void => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('power:changed', onBattery);
+  };
+  powerMonitor.on('on-battery', () => sendPower(true));
+  powerMonitor.on('on-ac', () => sendPower(false));
+
   // Use the normal quit lifecycle so will-quit stops native hooks and timers.
   ipcMain.on('app:quit', () => {
     app.quit();
@@ -558,22 +572,31 @@ app.whenReady().then(() => {
     hitRects = Array.isArray(rects) ? rects : [];
   });
 
-  setInterval(() => {
-    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
-    if (dragStart !== null) return; // don't interrupt active dragging
+  // Click-through: take the pointer only over the buddy's visible UI. Check often when the
+  // cursor is near the window, rarely when it's far away (saves battery while you work).
+  const NEAR_PX = 150;
+  const pollClickThrough = (): void => {
+    let next = 50;
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && dragStart === null) {
+      const cursor = screen.getCursorScreenPoint();
+      const bounds = mainWindow.getBounds();
+      const rx = cursor.x - bounds.x;
+      const ry = cursor.y - bounds.y;
 
-    const cursor = screen.getCursorScreenPoint();
-    const bounds = mainWindow.getBounds();
-    const rx = cursor.x - bounds.x;
-    const ry = cursor.y - bounds.y;
+      const overUi = isSettingsVisible || hitRects.some((r) =>
+        rx >= r.x && rx <= r.x + r.width && ry >= r.y && ry <= r.y + r.height
+      );
 
-    const overUi = isSettingsVisible || hitRects.some((r) =>
-      rx >= r.x && rx <= r.x + r.width && ry >= r.y && ry <= r.y + r.height
-    );
-
-    // forward: true lets the renderer still receive mouse-move events while click-through
-    safeSetIgnoreMouseEvents(mainWindow, !overUi, true);
-  }, 50);
+      // forward: true lets the renderer still receive mouse-move events while click-through
+      safeSetIgnoreMouseEvents(mainWindow, !overUi, true);
+      const near = rx > -NEAR_PX && ry > -NEAR_PX && rx < bounds.width + NEAR_PX && ry < bounds.height + NEAR_PX;
+      if (!near && !isSettingsVisible) next = 200;
+    } else if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+      next = 500; // hidden: nothing to hit-test
+    }
+    setTimeout(pollClickThrough, next);
+  };
+  pollClickThrough();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

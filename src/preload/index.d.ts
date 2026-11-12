@@ -24,6 +24,9 @@ declare global {
       setIgnoreMouseEvents(ignore: boolean): void
       resize(width: number, height: number): void
       onShowSettings(callback: () => void): () => void
+      /** Desktop: whether the computer runs on battery power (always false in the browser). */
+      isOnBattery(): Promise<boolean>
+      onPowerChange(callback: (onBattery: boolean) => void): () => void
       setSettingsVisible(visible: boolean): void
       setHitRects(rects: { x: number; y: number; width: number; height: number }[]): void
       logHydration(): void

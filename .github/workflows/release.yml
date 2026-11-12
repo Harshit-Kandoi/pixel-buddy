@@ -195,6 +195,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      # The checksum step checks installer names against package.json's version, which on main
+      # stays at the last hand-committed one: write the tag's version first, as the builds did.
+      - name: Set the release version
+        run: node scripts/next-version.mjs --set "${{ inputs.tag || github.ref_name }}"
       - uses: actions/download-artifact@v7
         with:
           pattern: pixel-buddy-*

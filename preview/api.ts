@@ -64,6 +64,8 @@ window.api = {
   selectSound: async () => { desktopOnly(); return null; },
   resetSound: async () => null,
   quit: desktopOnly,
+  isOnBattery: async () => false,
+  onPowerChange: () => () => {},
   showWindow() {}, hideWindow() {},
 };
 

@@ -108,6 +108,9 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     selectSound: async () => { desktopOnly(); return null; },
     resetSound: async () => null,
     quit: () => host.quit(),
+    // Video avatars are desktop-only, so the battery hint never applies in the browser.
+    isOnBattery: async () => false,
+    onPowerChange: () => () => {},
     showWindow: () => host.setVisible(true),
     hideWindow: () => host.setVisible(false),
   };
