@@ -105,7 +105,7 @@ It installs the build into a throwaway headless Chrome profile (your own profile
 
 Merging to `main` ships a release automatically (`.github/workflows/release-on-merge.yml`):
 
-1. Unit tests and type checks run, then the version goes up in `package.json`, `package-lock.json`, and the extension's `manifest.json`. The bot commits that to `main` as `chore(release): v1.x.y` and tags it.
+1. Unit tests and type checks run, then the next version is picked and the merged commit is **tagged** `v1.x.y`. Nothing is pushed to `main`: the tags are the source of truth for versions, and each build writes the tag's version into its own copy of `package.json`, `package-lock.json`, and the extension's `manifest.json`. (So the version in those files on `main` stays at the last one committed by hand; that's expected.)
 2. The desktop installers for Windows, both Macs, and Linux are built, the Windows and Mac installers are installed and launched, and the GitHub release is **published** with notes listing the commits since the last release. The website's download buttons pick it up straight away.
 3. The Chrome extension gets its end-to-end dry run, and its store zip, `pixel-buddy-extension-<version>.zip`, is attached to the same release. Upload that zip to the Chrome Web Store yourself (see [the store guide](extension/STORE_LISTING.md#releasing-an-update)).
 
@@ -117,9 +117,9 @@ The app, the extension, and the release share one version, in the v1 series:
 | starts with `feat:`, or contains `[minor]` | minor: 1.2.0 → 1.3.0 |
 | `[skip release]` in the merge (head) commit | no release |
 
-Website, docs, Markdown, and store-image changes don't trigger a release; the website deploys through its own workflow. Major versions are never automatic. To release by hand, run **Actions → Release on merge → Run workflow** and pick `patch` or `minor`. Preview the next version locally with `node scripts/next-version.mjs`.
+Website, docs, Markdown, and store-image changes don't trigger a release; the website deploys through its own workflow. Major versions are never automatic. To release by hand, run **Actions → Release on merge → Run workflow** and pick `patch` or `minor`. Preview the next version locally with `node scripts/next-version.mjs` (Node 18 or later).
 
-**One-time setup on GitHub:** in **Settings → Actions → General → Workflow permissions**, choose **Read and write permissions** so the workflow can push the version commit and tag. If `main` has branch protection or a ruleset, allow GitHub Actions to bypass it, or the version step fails at `git push`. Keep the repository public: the runners are free only for public repositories, and the workflows skip private ones.
+**One-time setup on GitHub:** in **Settings → Actions → General → Workflow permissions**, choose **Read and write permissions** so the workflow can push the release tag and create the release. `main` can be fully locked (for example a ruleset with **Require a pull request before merging**); the workflow never pushes to it, and branch rulesets don't apply to tags. Keep the repository public: the runners are free only for public repositories, and the workflows skip private ones.
 
 If GitHub's release downloads fail during a build (they returned 504s on 8 Nov 2026), the install and build steps retry, fetching Electron and electron-builder's tools from the [npmmirror.com](https://npmmirror.com) backup. Every Electron file is then checked against the official checksums pinned in the `electron` npm package (`scripts/verify-electron-downloads.mjs`), and electron-builder checks its tools against checksums built into it, so a tampered download stops the release. Downloads are cached between runs.
 

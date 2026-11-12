@@ -1,7 +1,8 @@
 name: Release on merge
 # Every merge to main that changes the app or extension ships a new v1.x.y:
-#   1. tests, then bump the version (package.json, package-lock.json, extension manifest),
-#      commit it to main and tag it,
+#   1. tests, then pick the next version and tag the merged commit with it. Nothing is pushed
+#      to main, so main can be fully locked; the build jobs write the version into their own
+#      copy of package.json and the extension manifest,
 #   2. build, smoke-test and publish the desktop installers as a GitHub release,
 #   3. dry-run the Chrome extension and attach its store zip to that release.
 # Patch by default; minor when a commit starts with "feat" or says [minor]; add
@@ -53,9 +54,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run typecheck
-      - name: Bump the version
+      - name: Pick the version
         id: next
-        run: node scripts/next-version.mjs --apply --bump "${{ inputs.bump || 'auto' }}"
+        run: node scripts/next-version.mjs --notes --bump "${{ inputs.bump || 'auto' }}"
       - name: Read release notes
         id: notes
         run: |
@@ -65,17 +66,14 @@ jobs:
             echo "RELEASE_NOTES_EOF"
           } >> "$GITHUB_OUTPUT"
           rm release-notes.generated.md
-      - name: Commit and tag the release
+      - name: Tag the merged commit
         env:
           TAG: ${{ steps.next.outputs.tag }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(release): ${TAG} [skip release]"
-          git tag "$TAG"
-          # Atomic: the version commit and its tag land together or not at all. Pushes made
-          # with the workflow token don't start other workflows, so this can't loop.
-          git push --atomic origin HEAD:main "$TAG"
+          # Only a tag is pushed (rulesets on main don't apply to tags). Pushes made with the
+          # workflow token don't start other workflows, so this can't loop.
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
 
   desktop:
     needs: version
@@ -101,6 +99,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Set the release version in the extension
+        run: node scripts/next-version.mjs --set "${{ needs.version.outputs.tag }}"
       - run: npm ci --ignore-scripts
       # The real extension in a throwaway headless Chrome (preinstalled on the runner).
       - name: Dry-run the extension
