@@ -24,6 +24,7 @@ import { SettingsManager } from './settings';
 import type { BuddyAnchor } from '../utils/types';
 import { ActivityMonitor } from './activity';
 import { Scheduler } from './scheduler';
+import { detectMeeting, MEETING_POLL_MS } from './meetings';
 import { TrayManager } from './tray';
 import { MEDIA_EXTENSIONS, isMediaFile } from '../utils/mediaFormats';
 
@@ -74,21 +75,43 @@ function getBottomRightPosition(width: number, height: number): { x: number; y: 
   return { x, y };
 }
 
+type Rect = { x: number; y: number; width: number; height: number };
+
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+
+/** Where a window with these bounds sits fully inside the work area of the screen it's mostly on (or nearest to). */
+function fitOnScreen(bounds: Rect): { x: number; y: number } {
+  const area = screen.getDisplayMatching(bounds).workArea;
+  return {
+    x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - bounds.width)),
+    y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - bounds.height)),
+  };
+}
+
+// A monitor was unplugged, rearranged, rescaled, or the taskbar/dock moved: bring the buddy
+// back onto a screen if it ended up (partly) off one, and remember the new spot.
+function keepOnScreen(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = mainWindow.getBounds();
+  const { x, y } = fitOnScreen(bounds);
+  if (x === bounds.x && y === bounds.y) return;
+  mainWindow.setPosition(x, y);
+  settingsManager.save({ windowX: x, windowY: y });
+}
+
 function createWindow(): void {
   const settings = settingsManager.getSettings();
   let x = settings.windowX;
   let y = settings.windowY;
 
   if (x !== null && y !== null && x !== undefined && y !== undefined) {
-    // Check if the coordinates are visible on any of the connected displays
-    const savedX = x;
-    const savedY = y;
-    const displays = screen.getAllDisplays();
-    const isVisible = displays.some((display) => {
-      const { x: dx, y: dy, width: dw, height: dh } = display.bounds;
-      return savedX >= dx && savedX < dx + dw && savedY >= dy && savedY < dy + dh;
-    });
-    if (!isVisible) {
+    // The saved spot may be on a monitor that's gone, or partly off a screen that changed size:
+    // keep it only if it still overlaps a screen, and pull it fully onto that screen.
+    const saved = { x, y, width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+    if (screen.getAllDisplays().some((display) => overlaps(saved, display.workArea))) {
+      ({ x, y } = fitOnScreen(saved));
+    } else {
       x = null;
       y = null;
     }
@@ -235,6 +258,24 @@ app.whenReady().then(() => {
       mainWindow.webContents.send('scheduler:tick', stateData);
     }
   });
+
+  // Calls and meetings: reminders wait while one is on (see meetings.ts for what's detected).
+  // Not checked while paused or on a break, when no reminder could appear anyway.
+  let meetingCheckBusy = false;
+  const checkMeeting = async (): Promise<void> => {
+    const settings = settingsManager.getSettings();
+    const { state, isPaused } = scheduler.getStateMachine().getData();
+    if (!settings.meetingAware) return scheduler.setInMeeting(false);
+    if (meetingCheckBusy || isPaused || state === 'BREAK') return;
+    meetingCheckBusy = true;
+    try {
+      scheduler.setInMeeting(await detectMeeting());
+    } finally {
+      meetingCheckBusy = false;
+    }
+  };
+  setInterval(() => void checkMeeting(), MEETING_POLL_MS);
+  void checkMeeting();
 
   // ---------------------------------
   // IPC Request/Response Setup
@@ -407,6 +448,17 @@ app.whenReady().then(() => {
       safeSetIgnoreMouseEvents(win, true, true);
     }
   });
+
+  // Multi-monitor: displays can disappear or change while the app runs (laptop lid, dock).
+  // Wait a moment: the OS reports several changes in a row while it settles.
+  let screenSettle: ReturnType<typeof setTimeout> | undefined;
+  const onScreensChanged = (): void => {
+    clearTimeout(screenSettle);
+    screenSettle = setTimeout(keepOnScreen, 500);
+  };
+  screen.on('display-removed', onScreensChanged);
+  screen.on('display-added', onScreensChanged);
+  screen.on('display-metrics-changed', onScreensChanged);
 
   // Battery: the buddy suggests a lighter avatar than a video while on battery power.
   ipcMain.handle('power:on-battery', () => powerMonitor.isOnBatteryPower());

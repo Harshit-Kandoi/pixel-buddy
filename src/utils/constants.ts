@@ -39,6 +39,8 @@ export const DEFAULT_SETTINGS = {
   hydrationDrankToday: 0,
   hydrationLastResetDate: null as string | null,
   smartMonitoringEnabled: true,
+  awayMinutes: 5, // no input this long = away (and being away this long counts as a break)
+  meetingAware: true, // hold break and water reminders while you're on a call
   statsFocusMinutesToday: 0,
   statsBreaksCompletedToday: 0,
   statsBreaksSkippedToday: 0,
@@ -55,4 +57,6 @@ export const ACTIVITY_WEIGHTS = {
 };
 
 export const ACTIVITY_THRESHOLD = 15; // threshold score per minute to be considered active
-export const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+export const AWAY_MINUTE_CHOICES = [2, 3, 5, 10, 15] as const;
+/** Seconds without input before you count as away (the awayMinutes setting, kept in a sane range). */
+export const awaySecondsFor = (minutes: number | undefined): number => Math.min(60, Math.max(1, Math.round(minutes ?? 5))) * 60;

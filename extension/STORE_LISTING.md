@@ -28,7 +28,8 @@ When it's break time, your buddy leads you through a short routine and acts it o
 ⏰ BREAK REMINDERS THAT FIT YOUR DAY
 • Pomodoro (25/5), Balanced (55/5), Deep focus (90/10), or your own timings
 • Take a break, snooze, or skip
-• Smart pause: the focus timer stops when you step away and resets after a real break
+• Smart pause: the focus timer stops when you step away and resets after a real break (you choose how long counts as away)
+• Quiet during calls: reminders wait while a tab is on a Meet, Zoom or Teams call
 • The toolbar icon counts down the minutes to your next break
 
 💧 WATER REMINDERS
@@ -40,6 +41,7 @@ When it's break time, your buddy leads you through a short routine and acts it o
 • Take 3 breaks while it lasts to claim it and keep it forever. Miss it, and it's gone until next year
 • Nine festivals a year: New Year, Sankranti & Pongal, Lunar New Year, Eid, Holi, Onam, Halloween, Diwali, and Christmas
 • Choose a theme color and the name your buddy greets you by
+• A buddy with moods: happy after a real break, sleepy when you skip one
 
 📸 SHARE YOUR DAY
 • Turn today's focus time, breaks, and water into a picture to share on LinkedIn, X, or with friends
@@ -51,7 +53,7 @@ When it's break time, your buddy leads you through a short routine and acts it o
 🔒 PRIVATE BY DESIGN
 No account, no analytics, no tracking. Your settings stay in your browser. It never reads the pages you visit.
 
-Free and open source (MIT). Also available as a desktop app for Windows, macOS, and Linux: https://harshit-kandoi.github.io/pixel-buddy/
+Free and open source (MIT). Also available as a desktop app for Windows, macOS, and Linux: https://pixelbuddy.harshitkandoi.in/
 
 Great for remote workers, developers, students, and anyone who forgets to look away from the screen.
 ```
@@ -64,7 +66,7 @@ Great for remote workers, developers, students, and anyone who forgets to look a
 
 The screenshots show the real app UI (zoomed 1.4× so it reads in store thumbnails) on an invented demo page, with a caption band. Regenerate them with `npm run ext:screenshots` (scenes in `store-assets/src/shots/`); the tiles are rendered from `store-assets/src/promo.html` (`?size=small` or `?size=marquee`).
 
-**Homepage URL:** https://harshit-kandoi.github.io/pixel-buddy/ **Support URL:** https://github.com/Harshit-Kandoi/pixel-buddy/issues
+**Homepage URL:** https://pixelbuddy.harshitkandoi.in/ **Support URL:** https://github.com/Harshit-Kandoi/pixel-buddy/issues
 
 ## Privacy practices
 
@@ -83,13 +85,13 @@ Pixel Buddy shows a small companion on web pages that reminds the user to take b
 | `alarms` | Wakes the extension's background service worker periodically so the break timer keeps running accurately. |
 | `offscreen` | Plays the short break reminder chime once from an offscreen audio document, instead of in every open tab. |
 | `notifications` | Shows break and water reminders when no visible tab is displaying the buddy. |
-| Host permission (content script on `<all_urls>`) | Displays the buddy companion overlay on the web pages the user visits, which is the extension's core feature. It only detects that keyboard or mouse activity happened, to end breaks early with smart monitoring. It never reads page content or what the user types. |
+| Host permission (content script on `<all_urls>`) | Displays the buddy companion overlay on the web pages the user visits, which is the extension's core feature. It only detects that keyboard or mouse activity happened, to end breaks early with smart monitoring, and whether the page is on a video call (a live camera or microphone stream, or a Meet or Zoom meeting page), to hold reminders during calls. It never reads page content or what the user types, and never accesses the camera or microphone. |
 
 **Remote code:** No, I am not using remote code.
 
 **Data usage:** Check **none** of the data categories. Then certify all three statements: no selling of data, no use unrelated to the single purpose, and no use for creditworthiness or lending.
 
-**Privacy policy URL:** https://harshit-kandoi.github.io/pixel-buddy/privacy.html (source: `website/dist/privacy.html`, published with the website).
+**Privacy policy URL:** https://pixelbuddy.harshitkandoi.in/privacy.html (source: `website/dist/privacy.html`, published with the website).
 
 ## Listing
 

@@ -35,6 +35,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
       const secs = skipSecondsLeft % 60;
       return `Skip: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
+    if (stateData.inMeeting && activeWorkSeconds >= totalWorkSeconds) return 'After call';
     const leftSeconds = Math.max(0, totalWorkSeconds - activeWorkSeconds);
     const mins = Math.floor(leftSeconds / 60);
     const secs = leftSeconds % 60;
@@ -92,7 +93,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
       <div className="widget-content">
         {activeTab === 'timer' ? (
           <div className="widget-timer-tab">
-            <div className="widget-section-title">{stateData.isPaused ? 'Reminders paused' : 'Next little break'}</div>
+            <div className="widget-section-title">{stateData.isPaused ? 'Reminders paused' : stateData.inMeeting ? 'On a call · reminders wait' : 'Next little break'}</div>
             <div className="widget-countdown">{getRemainingTimeStr()}</div>
             
             <div className="widget-progress-container">

@@ -32,6 +32,10 @@ export interface AppSettings {
   hydrationDrankToday: number;
   hydrationLastResetDate: string | null;
   smartMonitoringEnabled: boolean;
+  /** Minutes without keyboard or mouse input before you count as away. */
+  awayMinutes: number;
+  /** Hold reminders while a call or meeting is detected. */
+  meetingAware: boolean;
   statsFocusMinutesToday: number;
   statsBreaksCompletedToday: number;
   statsBreaksSkippedToday: number;
@@ -63,5 +67,7 @@ export interface StateMachineData {
   isPaused: boolean;
   hydrationSecondsLeft: number;
   hydrationReminderActive: boolean;
+  /** A call or meeting was detected: reminders wait until it ends. */
+  inMeeting: boolean;
 }
 

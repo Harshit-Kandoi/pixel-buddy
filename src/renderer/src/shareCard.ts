@@ -111,7 +111,7 @@ export async function drawShareCard(settings: AppSettings, skin: AvatarSkin, now
   ctx.font = `500 18px ${FONT}`;
   ctx.fillText('A free break & water reminder for Chrome and desktop', 214, H - 29);
   ctx.textAlign = 'right';
-  ctx.fillText('harshit-kandoi.github.io/pixel-buddy', W - 72, H - 29);
+  ctx.fillText('pixelbuddy.harshitkandoi.in', W - 72, H - 29);
   ctx.textAlign = 'left';
 
   return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Could not draw the card'))), 'image/png'));

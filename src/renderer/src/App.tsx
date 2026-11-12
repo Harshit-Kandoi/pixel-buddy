@@ -11,6 +11,7 @@ import { avatarSrc } from './avatars';
 import { isImageFile } from '../../utils/mediaFormats';
 import { routineForBreak, stepAt } from '../../utils/breakRoutines';
 import { CHROME_REVIEW_URL, EDGE_ADDONS_URL, GITHUB_URL } from '../../utils/links';
+import { HAPPY_FOR_MS, TIRED_LINES, buddyMood, finishedBreak } from '../../utils/mood';
 
 const IN_EXTENSION = location.protocol === 'chrome-extension:';
 // Battery: after this long with nothing happening the buddy rests (no endless float, festival
@@ -76,6 +77,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const lastLivelyRef = useRef(0); // set by the wake effect on mount
   const [festiveAnimating, setFestiveAnimating] = useState(true);
   const festiveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [happy, setHappy] = useState(false); // a minute of good mood after a finished break
+  const happyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Drag and click tracking refs
   const dragThreshold = 5;
@@ -151,6 +154,11 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
       !!d?.hydrationReminderActive && d.state !== 'POPUP' && d.state !== 'BREAK';
     const receive = (data: StateMachineData): void => {
       if (showsWater(data) && !showsWater(stateDataRef.current)) setIsDismissed(false);
+      if (finishedBreak(stateDataRef.current, data)) {
+        setHappy(true);
+        clearTimeout(happyTimerRef.current);
+        happyTimerRef.current = setTimeout(() => setHappy(false), HAPPY_FOR_MS);
+      }
       stateDataRef.current = data;
       setStateData(data);
     };
@@ -186,6 +194,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     const unsubscribeShowSettings = window.api.onShowSettings(openSettings);
 
     return () => {
+      clearTimeout(happyTimerRef.current);
       unsubscribeUpdate();
       unsubscribeTick();
       unsubscribeSettings();
@@ -433,7 +442,10 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     playChime(soundEnabled);
 
     const skin = resolveAvatarSkin(settingsRef.current?.avatarSkin, new Date(), settingsRef.current?.claimedSkins);
-    const randomQuote = getRandomBuddyLine(new Date(), skin === 'classic' ? [] : FESTIVE_LINES[skin]);
+    const tired = !!stateDataRef.current && buddyMood(stateDataRef.current, false) === 'tired';
+    const randomQuote = tired
+      ? TIRED_LINES[Math.floor(Math.random() * TIRED_LINES.length)]
+      : getRandomBuddyLine(new Date(), skin === 'classic' ? [] : FESTIVE_LINES[skin]);
     setClickedDialogue(randomQuote);
 
     // Only use buddy-jump on click — never buddy-spin (which rotates GIFs)
@@ -696,6 +708,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
               customVideoPath={settings.customVideoPath}
               defaultSrc={avatarSrc(resolveAvatarSkin(settings.avatarSkin, new Date(), settings.claimedSkins), !festiveAnimating || (resting && !bobbing))}
               resting={resting}
+              mood={buddyMood(stateData, happy)}
               keyingMode={settings.keyingMode}
               debugKeyer={settings.debugKeyer}
               clickAnimClass={clickAnimClass || (breakStep && !clickedDialogue ? `buddy-motion-${breakStep.step.motion}` : '') || (bobbing ? 'buddy-bob' : '')}

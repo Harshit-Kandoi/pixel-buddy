@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import buddyMascot from '../assets/buddy.svg';
 import { toMediaUrl } from '../../../utils/mediaUrl';
 import { isImageFile } from '../../../utils/mediaFormats';
+import { MOOD_BADGES, type Mood } from '../../../utils/mood';
 
 interface BuddyProps {
   state: string;
@@ -15,6 +16,8 @@ interface BuddyProps {
   onFileDrop?: (filePath: string) => void;
   /** Idle: hold still instead of floating forever (saves battery). */
   resting?: boolean;
+  /** Shown as a small badge by the buddy's head; a tired buddy also looks a little dimmer. */
+  mood?: Mood | null;
 }
 
 // ─── WebGL Shader Sources ────────────────────────────────────────────────────
@@ -156,6 +159,7 @@ export const Buddy: React.FC<BuddyProps> = ({
   clickAnimClass = '',
   onFileDrop,
   resting = false,
+  mood = null,
 }) => {
   // Remember which source failed: switching file or keying mode clears the error by itself.
   const sourceKey = `${customVideoPath}|${keyingMode}|${debugKeyer}`;
@@ -371,7 +375,7 @@ export const Buddy: React.FC<BuddyProps> = ({
   };
 
   const mediaCss: React.CSSProperties = {
-    filter: 'drop-shadow(0 8px 14px rgba(0,0,0,0.32))',
+    filter: `drop-shadow(0 8px 14px rgba(0,0,0,0.32))${mood === 'tired' ? ' saturate(0.7) brightness(0.94)' : ''}`,
     display: 'block',
   };
 
@@ -387,7 +391,7 @@ export const Buddy: React.FC<BuddyProps> = ({
 
   return (
     <div
-      className={`buddy-container ${containerAnim}`}
+      className={`buddy-container ${containerAnim}${mood ? ` mood-${mood}` : ''}`}
       onMouseDown={onMouseDown}
       // Block Chromium's native image drag — it swallows mouseup and leaves input stuck
       onDragStart={(e) => e.preventDefault()}
@@ -423,6 +427,11 @@ export const Buddy: React.FC<BuddyProps> = ({
         )
       ) : (
         renderFallback()
+      )}
+      {mood && (
+        <span key={mood} className={`buddy-mood buddy-mood-${mood}`} role="img" aria-label={MOOD_BADGES[mood].label} title={MOOD_BADGES[mood].label}>
+          {MOOD_BADGES[mood].emoji}
+        </span>
       )}
     </div>
   );

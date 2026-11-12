@@ -23,7 +23,7 @@ const manager = {
   },
 } as unknown as SettingsManager;
 const activity = {
-  start: noop, stop: noop, resetMinuteScore: noop,
+  start: noop, stop: noop, resetMinuteScore: noop, markActive: noop,
   getContinuousIdleSeconds: () => 0,
   tick: () => ({ isActiveThisSecond: false, currentMinuteScore: 0 }),
 } as unknown as ActivityMonitor;
@@ -78,6 +78,9 @@ export const preview = {
   break: () => { scheduler.handleReset(); scheduler.handleTakeBreak(); },
   // A break that started this many seconds ago (for guided-routine screenshots).
   breakAt: (elapsed: number) => { preview.break(); scheduler.getStateMachine().setBreakSeconds(settings.breakDuration * 60 - elapsed); },
+  // Moods and calls (for checking the badges by eye).
+  call: (active = true) => { scheduler.handleReset(); scheduler.setInMeeting(active); },
+  tired: () => { scheduler.handleReset(); scheduler.setInMeeting(false); scheduler.getStateMachine().incrementSkips(); },
   water: () => { scheduler.handleReset(); scheduler.getStateMachine().setHydrationSeconds(0); scheduler.getStateMachine().setHydrationReminderActive(true); },
 };
 scheduler.start(data => ticks.forEach(callback => callback({ ...data })));

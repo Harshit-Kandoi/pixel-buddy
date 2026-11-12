@@ -6,6 +6,6 @@ import App from '../src/renderer/src/App';
 import { preview } from './api';
 
 createRoot(document.getElementById('root')!).render(<App />);
-for (const [id, action] of Object.entries({ 'open-settings': preview.openSettings, 'show-focus': preview.focus, 'show-reminder': preview.reminder, 'show-break': preview.break, 'show-water': preview.water })) {
+for (const [id, action] of Object.entries({ 'open-settings': preview.openSettings, 'show-focus': preview.focus, 'show-reminder': preview.reminder, 'show-break': preview.break, 'show-water': preview.water, 'show-call': () => preview.call(), 'show-tired': preview.tired })) {
   document.getElementById(id)!.addEventListener('click', action);
 }

@@ -1,4 +1,4 @@
-export const WEBSITE_URL = 'https://harshit-kandoi.github.io/pixel-buddy/';
+export const WEBSITE_URL = 'https://pixelbuddy.harshitkandoi.in/';
 export const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/pixel-buddy/ikggibbkgbebflafmlaihlmdpibpdggc';
 export const CHROME_REVIEW_URL = `${CHROME_STORE_URL}/reviews`;
 // Paste the Microsoft Edge Add-ons listing URL here once it's published; until then Edge users'

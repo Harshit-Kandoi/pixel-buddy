@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppSettings } from '../../../utils/types';
+import { AWAY_MINUTE_CHOICES } from '../../../utils/constants';
 import { toMediaUrl } from '../../../utils/mediaUrl';
 import { AVATAR_SKINS } from '../avatars';
 import { drawShareCard, downloadBlob } from '../shareCard';
@@ -13,6 +14,16 @@ interface SettingsProps {
   onClose: () => void;
   onHeaderMouseDown?: (e: React.MouseEvent) => void;
 }
+
+// What "Quiet during calls" can see differs by platform (see src/main/meetings.ts).
+const CALL_DETECTION_HELP =
+  location.protocol === 'chrome-extension:'
+    ? 'Break and water reminders wait while a tab is on a call (Meet, Zoom, Teams, any camera or mic call).'
+    : navigator.userAgent.includes('Windows')
+      ? 'Break and water reminders wait while any app is using your microphone.'
+      : navigator.userAgent.includes('Mac')
+        ? 'Break and water reminders wait while you are in a Zoom meeting.'
+        : 'Break and water reminders wait during calls (not detected on Linux yet).';
 
 // Friendly label from a library path like custom_buddy_<ts>__<original>.<ext>
 function getFilename(p: string): string {
@@ -733,6 +744,43 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                       setStartOnBoot(val);
                       handleSave('startOnBoot', val);
                     }}
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            {/* Away time and calls */}
+            <div className="switch-group" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '12px' }}>
+              {smartMonitoringEnabled && (
+                <div className="switch-row">
+                  <div className="switch-label-group">
+                    <span className="switch-label">Away After</span>
+                    <span className="switch-sublabel">No keyboard or mouse this long pauses the focus timer. Being away this long counts as a break.</span>
+                  </div>
+                  <select
+                    aria-label="Away after"
+                    className="setting-select setting-select-compact non-draggable"
+                    value={settings.awayMinutes ?? 5}
+                    onChange={(e) => handleSave('awayMinutes', Number(e.target.value))}
+                  >
+                    {AWAY_MINUTE_CHOICES.map((m) => (
+                      <option key={m} value={m}>{m} min</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="switch-row">
+                <div className="switch-label-group">
+                  <span className="switch-label">Quiet During Calls</span>
+                  <span className="switch-sublabel">{CALL_DETECTION_HELP}</span>
+                </div>
+                <label className="switch non-draggable">
+                  <input
+                    type="checkbox"
+                    aria-label="Hold reminders during calls"
+                    checked={settings.meetingAware ?? true}
+                    onChange={(e) => handleSave('meetingAware', e.target.checked)}
                   />
                   <span className="slider"></span>
                 </label>
