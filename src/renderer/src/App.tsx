@@ -11,7 +11,8 @@ import { avatarSrc } from './avatars';
 import { isImageFile } from '../../utils/mediaFormats';
 import { routineForBreak, stepAt } from '../../utils/breakRoutines';
 import { CHROME_REVIEW_URL, EDGE_ADDONS_URL, GITHUB_URL } from '../../utils/links';
-import { HAPPY_FOR_MS, TIRED_LINES, buddyMood, finishedBreak } from '../../utils/mood';
+import { HAPPY_FOR_MS, TIRED_LINES, buddyMood, finishedBreak, moodReason } from '../../utils/mood';
+import { NOTE_MAX_LENGTH, addNote, markSeen, pendingNote } from '../../utils/notes';
 
 const IN_EXTENSION = location.protocol === 'chrome-extension:';
 // Battery: after this long with nothing happening the buddy rests (no endless float, festival
@@ -77,6 +78,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const lastLivelyRef = useRef(0); // set by the wake effect on mount
   const [festiveAnimating, setFestiveAnimating] = useState(true);
   const festiveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [noteDraft, setNoteDraft] = useState(''); // "what were you doing?" at the break reminder
   const [happy, setHappy] = useState(false); // a minute of good mood after a finished break
   const happyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -478,11 +480,14 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     : null;
   const breakTip = BREAK_TIPS[(Math.floor(breakElapsed / 15) + (settings.statsBreaksCompletedToday ?? 0) * 3) % BREAK_TIPS.length];
 
+  // Break notes: the line you left yourself before the break, shown when you're back.
+  const returnNote = stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder ? pendingNote(settings.breakNotes) : null;
+
   // Festival buddies are limited-time: take enough breaks during the festival to claim one.
   const claim = claimStatus(settings);
   const showClaim =
     !!claim && claim.earned && !claim.claimed && claim.breaks > claimLaterAt &&
-    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder;
+    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !returnNote;
   const claimBuddy = (): void => {
     if (!claim) return;
     const { skin, name } = claim.festival.festival;
@@ -493,16 +498,24 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const usingVideo = !!settings.customVideoPath && !isImageFile(settings.customVideoPath);
   const showBatteryTip =
     onBattery && usingVideo && !batteryTipDismissed &&
-    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !showClaim;
+    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !showClaim && !returnNote;
+
+  const takeBreakWithNote = (): void => {
+    if (noteDraft.trim()) handleSaveSettings({ breakNotes: addNote(settings.breakNotes, noteDraft) });
+    setNoteDraft('');
+    window.api.takeBreak();
+  };
 
   // Asked once, in a calm moment after a few completed breaks.
   const showReviewAsk =
-    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !showClaim && !showBatteryTip &&
+    stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !returnNote && !showClaim && !showBatteryTip &&
     settings.reviewAskAt >= 0 && (settings.lifetimeBreaksCompleted ?? 0) >= settings.reviewAskAt;
   const answerReviewAsk = (answer: 'yes' | 'later' | 'never'): void => {
     if (answer === 'yes') window.open(STORE_REVIEW_URL || GITHUB_URL, '_blank', 'noopener');
     handleSaveSettings({ reviewAskAt: answer === 'later' ? (settings.lifetimeBreaksCompleted ?? 0) + 10 : -1 });
   };
+
+  const mood = settings.showMoods === false ? null : buddyMood(stateData, happy);
 
   // Determine if dialogue speech bubble should be shown
   const showSpeechBubble = 
@@ -510,6 +523,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     stateData.state === 'BREAK' || 
     stateData.state === 'IDLE' || 
     showHydrationReminder ||
+    !!returnNote ||
     showClaim ||
     showBatteryTip ||
     showReviewAsk ||
@@ -538,6 +552,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                 clickedDialogue || 
                 (showHydrationReminder
                   ? `Hey ${settings.userName || 'there'}!\nTime for a water break! 💧\nStay hydrated to keep focused.` 
+                  : returnNote
+                    ? `Welcome back${settings.userName ? `, ${settings.userName}` : ''}! 👋\nBefore your break you were:\n“${returnNote.text}”`
                   : showBatteryTip
                     ? `On battery 🔋\nVideo avatars use the most energy. A picture, a GIF or the classic buddy lasts longer.`
                   : showClaim && claim
@@ -573,7 +589,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                 <div className="action-buttons non-draggable">
                   <button 
                     className="btn btn-primary" 
-                    onClick={() => window.api.takeBreak()}
+                    onClick={takeBreakWithNote}
                   >
                     Take Break
                   </button>
@@ -588,6 +604,28 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                     onClick={() => window.api.skip()}
                   >
                     Skip
+                  </button>
+                </div>
+              )}
+
+              {/* Leave yourself a note for when you're back (optional); Enter takes the break */}
+              {stateData.state === 'POPUP' && !clickedDialogue && (
+                <input
+                  type="text"
+                  className="break-note-input non-draggable"
+                  aria-label="Note for when you're back"
+                  placeholder="📝 Note for when you're back (optional)"
+                  maxLength={NOTE_MAX_LENGTH}
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') takeBreakWithNote(); }}
+                />
+              )}
+
+              {returnNote && (
+                <div className="action-buttons non-draggable">
+                  <button className="btn btn-primary" onClick={() => handleSaveSettings({ breakNotes: markSeen(settings.breakNotes, returnNote.id) })}>
+                    Got it 👍
                   </button>
                 </div>
               )}
@@ -708,7 +746,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
               customVideoPath={settings.customVideoPath}
               defaultSrc={avatarSrc(resolveAvatarSkin(settings.avatarSkin, new Date(), settings.claimedSkins), !festiveAnimating || (resting && !bobbing))}
               resting={resting}
-              mood={buddyMood(stateData, happy)}
+              mood={mood}
+              onMoodClick={() => { if (mood) setClickedDialogue(moodReason(mood, stateData)); }}
               keyingMode={settings.keyingMode}
               debugKeyer={settings.debugKeyer}
               clickAnimClass={clickAnimClass || (breakStep && !clickedDialogue ? `buddy-motion-${breakStep.step.motion}` : '') || (bobbing ? 'buddy-bob' : '')}

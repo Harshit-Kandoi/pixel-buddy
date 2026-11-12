@@ -21,6 +21,8 @@ declare global {
       onTick(callback: (data: StateMachineData) => void): () => void
       getPermissionStatus(): Promise<boolean>
       requestPermission(): Promise<boolean>
+      /** macOS: open System Settings at Privacy & Security → Accessibility. */
+      openPermissionSettings(): Promise<void>
       setIgnoreMouseEvents(ignore: boolean): void
       resize(width: number, height: number): void
       onShowSettings(callback: () => void): () => void
@@ -43,6 +45,8 @@ declare global {
       selectSound(): Promise<string | null>
       resetSound(): Promise<null>
       quit(): void
+      /** Desktop: whether the system will open the app at login (null where it doesn't apply). */
+      getLoginItemStatus(): Promise<{ enabled: boolean; needsApproval: boolean; managed: boolean } | null>
       showWindow(): void
       hideWindow(): void
     }

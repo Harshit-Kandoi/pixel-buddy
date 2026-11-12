@@ -1,4 +1,4 @@
-import { powerMonitor, systemPreferences, ipcMain } from 'electron';
+import { powerMonitor, systemPreferences, ipcMain, shell } from 'electron';
 import { ACTIVITY_WEIGHTS } from '../utils/constants';
 
 let uIOhook: typeof import('uiohook-napi').uIOhook | null = null;
@@ -46,6 +46,12 @@ export class ActivityMonitor {
 
     ipcMain.handle('activity:request-permission', () => {
       return this.requestAccessibilityPermission();
+    });
+
+    // Opens System Settings → Privacy & Security → Accessibility.
+    ipcMain.handle('activity:open-permission-settings', () => {
+      if (process.platform !== 'darwin') return;
+      return shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
     });
   }
 

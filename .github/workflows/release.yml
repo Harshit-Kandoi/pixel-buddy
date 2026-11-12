@@ -149,10 +149,21 @@ jobs:
           mount="$RUNNER_TEMP/pixel-buddy-mount"
           destination="$RUNNER_TEMP/pixel-buddy-installed"
           mkdir -p "$mount" "$destination"
-          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
-          trap 'hdiutil detach "$mount"' EXIT
+          # GitHub's Mac runners (the Intel ones especially) sometimes fail to mount a disk image
+          # or start an app slowly. Try twice; a real problem fails both times.
+          for attempt in 1 2; do
+            hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount" && break
+            [ "$attempt" = 2 ] && exit 1
+            echo "::warning::Mounting the DMG failed; retrying in 15 s."; sleep 15
+          done
+          trap 'hdiutil detach "$mount" || hdiutil detach -force "$mount"' EXIT
           ditto "$mount/Pixel Buddy.app" "$destination/Pixel Buddy.app"
-          node scripts/smoke-desktop.mjs "$destination/Pixel Buddy.app/Contents/MacOS/Pixel Buddy"
+          app="$destination/Pixel Buddy.app/Contents/MacOS/Pixel Buddy"
+          node scripts/smoke-desktop.mjs "$app" || {
+            echo "::warning::The launch check failed once on this runner; trying again."
+            sleep 10
+            node scripts/smoke-desktop.mjs "$app"
+          }
       - name: Install NSIS EXE and check app launch
         if: runner.os == 'Windows'
         shell: pwsh

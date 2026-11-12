@@ -34,6 +34,7 @@ const api = {
   // Activity API
   getPermissionStatus: () => ipcRenderer.invoke('activity:get-permission-status'),
   requestPermission: () => ipcRenderer.invoke('activity:request-permission'),
+  openPermissionSettings: () => ipcRenderer.invoke('activity:open-permission-settings'),
 
   // Window API
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('window:set-ignore-mouse-events', ignore),
@@ -76,6 +77,7 @@ const api = {
 
   // App Controls
   quit: () => ipcRenderer.send('app:quit'),
+  getLoginItemStatus: () => ipcRenderer.invoke('app:login-item-status'),
 
   // Visibility Controls
   showWindow: () => ipcRenderer.send('window:show'),

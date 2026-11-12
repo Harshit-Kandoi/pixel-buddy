@@ -91,6 +91,7 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     onTick: callback => subscribe(ticks, callback),
     getPermissionStatus: async () => true,
     requestPermission: async () => true,
+    openPermissionSettings: async () => undefined,
     setIgnoreMouseEvents: noop,
     resize: (width, height) => host.resize(width, height),
     onShowSettings: callback => subscribe(showSettings, callback),
@@ -111,6 +112,7 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     selectSound: async () => { desktopOnly(); return null; },
     resetSound: async () => null,
     quit: () => host.quit(),
+    getLoginItemStatus: async () => null,
     // Video avatars are desktop-only, so the battery hint never applies in the browser.
     isOnBattery: async () => false,
     onPowerChange: () => () => {},

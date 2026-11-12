@@ -4,12 +4,14 @@ import * as path from 'path';
 import { SettingsManager } from '../settings';
 import { DEFAULT_SETTINGS } from '../../utils/constants';
 
-const { TEST_DIR } = vi.hoisted(() => {
+const { TEST_DIR, loginItem } = vi.hoisted(() => {
   // vi.hoisted runs before the imports above exist, so this one has to be a require.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const path = require('path');
   return {
     TEST_DIR: path.join(__dirname, 'temp_test_userdata'),
+    // What the system has registered to open at login.
+    loginItem: { openAtLogin: false, status: 'not-registered' as string },
   };
 });
 
@@ -21,7 +23,12 @@ vi.mock('electron', () => {
         if (name === 'exe') return '/mock/exe/path';
         return TEST_DIR;
       }),
-      setLoginItemSettings: vi.fn(),
+      isPackaged: true,
+      getLoginItemSettings: vi.fn(() => ({ ...loginItem })),
+      setLoginItemSettings: vi.fn(({ openAtLogin }) => {
+        loginItem.openAtLogin = openAtLogin;
+        loginItem.status = openAtLogin ? 'enabled' : 'not-registered';
+      }),
     },
   };
 });
@@ -87,6 +94,7 @@ describe('SettingsManager', () => {
   test('updates Electron login settings when startOnBoot is modified', async () => {
     const { app } = await import('electron');
     const manager = new SettingsManager();
+    loginItem.openAtLogin = true;
 
     manager.save({ startOnBoot: false });
     expect(app.setLoginItemSettings).toHaveBeenCalledWith({
@@ -100,6 +108,36 @@ describe('SettingsManager', () => {
       path: '/mock/exe/path',
     });
   });
+  test('at launch, registers open-at-login when the setting is on but the system lost it', async () => {
+    const { app } = await import('electron');
+    vi.mocked(app.setLoginItemSettings).mockClear();
+    Object.assign(loginItem, { openAtLogin: false, status: 'not-registered' });
+    const manager = new SettingsManager();
+    manager.save({ startOnBoot: true });
+    Object.assign(loginItem, { openAtLogin: false, status: 'not-registered' }); // e.g. an older version never registered it
+    vi.mocked(app.setLoginItemSettings).mockClear();
+    manager.syncLoginItem();
+    expect(app.setLoginItemSettings).toHaveBeenCalledWith({ openAtLogin: true, path: '/mock/exe/path' });
+    expect(manager.loginItemStatus()).toEqual({ enabled: true, needsApproval: false, managed: true });
+
+    // Already right, or waiting for the user's approval on macOS: leave it alone.
+    vi.mocked(app.setLoginItemSettings).mockClear();
+    manager.syncLoginItem();
+    Object.assign(loginItem, { openAtLogin: false, status: 'requires-approval' });
+    manager.syncLoginItem();
+    expect(app.setLoginItemSettings).not.toHaveBeenCalled();
+    expect(manager.loginItemStatus().needsApproval).toBe(true);
+  });
+
+  test('turning it off removes the login item', async () => {
+    const { app } = await import('electron');
+    Object.assign(loginItem, { openAtLogin: true, status: 'enabled' });
+    const manager = new SettingsManager();
+    manager.save({ startOnBoot: false });
+    expect(app.setLoginItemSettings).toHaveBeenLastCalledWith({ openAtLogin: false, path: '/mock/exe/path' });
+    expect(loginItem.openAtLogin).toBe(false);
+  });
+
   test('resets daily counters at midnight while the app stays open', () => {
     vi.useFakeTimers();
     try {

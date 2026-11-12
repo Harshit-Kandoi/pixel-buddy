@@ -30,6 +30,7 @@ When it's break time, your buddy leads you through a short routine and acts it o
 • Take a break, snooze, or skip
 • Smart pause: the focus timer stops when you step away and resets after a real break (you choose how long counts as away)
 • Quiet during calls: reminders wait while a tab is on a Meet, Zoom or Teams call
+• Break notes: jot what you were doing before a break, and your buddy reminds you when you're back
 • The toolbar icon counts down the minutes to your next break
 
 💧 WATER REMINDERS

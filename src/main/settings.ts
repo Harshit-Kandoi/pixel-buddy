@@ -57,6 +57,32 @@ export class SettingsManager {
     }
   }
 
+  /**
+   * Make the system's "open at login" match the Start on Boot setting. Runs at every launch, not
+   * only when the switch changes: a setting carried over from an older version, a reinstall, or
+   * an update to a new folder (Windows) would otherwise leave the two out of step.
+   */
+  public syncLoginItem(): void {
+    // A development run would register the bare Electron binary as a login item.
+    if (!app.isPackaged) return;
+    try {
+      const wanted = this.settings.startOnBoot;
+      const current = app.getLoginItemSettings();
+      // macOS: "requires approval" means it's registered and waiting for the user to allow it.
+      const registered = current.openAtLogin || current.status === 'requires-approval';
+      if (registered !== wanted) app.setLoginItemSettings({ openAtLogin: wanted, path: app.getPath('exe') });
+    } catch (error) {
+      console.error('Failed to update open at login:', error);
+    }
+  }
+
+  /** What the system will actually do at login, for the Settings screen. */
+  public loginItemStatus(): { enabled: boolean; needsApproval: boolean; managed: boolean } {
+    if (!app.isPackaged) return { enabled: false, needsApproval: false, managed: false };
+    const current = app.getLoginItemSettings();
+    return { enabled: current.openAtLogin, needsApproval: current.status === 'requires-approval', managed: true };
+  }
+
   public getSettings(): AppSettings {
     this.checkDailyReset();
     return { ...this.settings, mediaLibrary: [...this.settings.mediaLibrary] };
@@ -69,13 +95,7 @@ export class SettingsManager {
         ...newSettings,
       };
       
-      // Auto-launch handling in Electron
-      if (typeof newSettings.startOnBoot !== 'undefined') {
-        app.setLoginItemSettings({
-          openAtLogin: this.settings.startOnBoot,
-          path: app.getPath('exe'),
-        });
-      }
+      if (typeof newSettings.startOnBoot !== 'undefined') this.syncLoginItem();
 
       fs.writeFileSync(this.filePath, JSON.stringify(this.settings, null, 2), 'utf-8');
       this.onChange?.({ ...this.settings });

@@ -1,5 +1,6 @@
 import { AppState } from './constants';
 import type { AvatarSkinSetting, FestivalSkin } from './seasons';
+import type { BreakNote } from './notes';
 
 export interface AppSettings {
   workDuration: number;
@@ -34,6 +35,8 @@ export interface AppSettings {
   smartMonitoringEnabled: boolean;
   /** Minutes without keyboard or mouse input before you count as away. */
   awayMinutes: number;
+  /** Show the mood badge (🎧 ✨ 😪) by the buddy's head. */
+  showMoods: boolean;
   /** Hold reminders while a call or meeting is detected. */
   meetingAware: boolean;
   statsFocusMinutesToday: number;
@@ -41,6 +44,8 @@ export interface AppSettings {
   statsBreaksSkippedToday: number;
   statsBreaksSnoozedToday: number;
   lifetimeBreaksCompleted: number;
+  /** Notes you left yourself before breaks, newest first (see notes.ts). */
+  breakNotes: BreakNote[];
   /** Ask for a rating once this many breaks are done; -1 means never ask again. */
   reviewAskAt: number;
 }
