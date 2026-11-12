@@ -39,7 +39,8 @@ for (const stream of [child.stdout, child.stderr]) {
 let socket;
 let sequence = 0;
 const pending = new Map();
-const deadline = Date.now() + 60_000;
+// Slow runners (Intel Macs) can take a while to start the app the first time.
+const deadline = Date.now() + 120_000;
 function alive() {
   if (launchError) throw launchError;
   if (child.exitCode !== null || child.signalCode !== null)
