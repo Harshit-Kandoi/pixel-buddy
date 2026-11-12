@@ -20,6 +20,21 @@ Unsigned downloads can show **Unknown publisher**, **Windows protected your PC**
 
 Do not disable Defender, SmartScreen, Smart App Control, or organizational policies. This workflow neither changes those protections nor promises that unsigned installers can run under every policy.
 
+## Helping users open unsigned builds
+
+The website's download section has an "Opening it the first time" guide (`#first-launch` in `website/dist/index.html`) with Apple's and Microsoft's own steps: **Open Anyway** in System Settings → Privacy & Security on macOS 15 and later (Control-click → **Open** on macOS 14 and earlier), and **More info → Run anyway** on Windows. These approve one app once; they don't weaken the protections for anything else.
+
+## Removing the warnings (paid or by application)
+
+Nothing in packaging can remove these warnings; only a trusted signature can.
+
+- **macOS:** join the [Apple Developer Program](https://developer.apple.com/programs/) (US$99 a year or the local equivalent). Create a **Developer ID Application** certificate and an App Store Connect API key, then add them to the repository's Actions secrets (`CSC_LINK` and `CSC_KEY_PASSWORD` for the certificate, `APPLE_API_KEY`, `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` for notarization). Then set `mac.identity` and `mac.notarize` in `electron-builder.yml`, enable the hardened runtime, and keep `CSC_IDENTITY_AUTO_DISCOVERY` off. Signed and notarized builds open without the "could not verify" warning.
+- **Windows:**
+  - [SignPath Foundation](https://signpath.org/) signs qualifying open-source projects for free, after an application.
+  - [Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/) (formerly Trusted Signing) is a low-cost monthly service; individual eligibility is limited by country.
+  - Traditional Authenticode certificates cost more per year.
+  - With any of these, SmartScreen can still warn about a new app until it builds download reputation.
+
 ## What checksums prove
 
 `SHA256SUMS` detects a damaged or altered download relative to the published manifest. It does not prove the publisher's identity, establish that an app is malware-free, or protect against an attacker who replaces both installer and manifest. Get both files from this project's official GitHub release over HTTPS.
