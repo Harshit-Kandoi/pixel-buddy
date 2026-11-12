@@ -121,7 +121,7 @@ function createWindow(): void {
 
   // macOS floating panel — keeps above full-screen apps
   if (process.platform === 'darwin') {
-    (winOptions as any).type = 'panel';
+    winOptions.type = 'panel';
   }
 
   mainWindow = new BrowserWindow(winOptions);

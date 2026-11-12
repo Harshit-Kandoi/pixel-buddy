@@ -12,7 +12,7 @@ let visible = false;
 let interactive = false;
 let hitRects: Rect[] = [];
 
-const clamp = (value: number, max: number) => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
+const clamp = (value: number, max: number): number => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
 
 function render(): void {
   if (!frame) return;
@@ -101,7 +101,7 @@ const orphanCheck = setInterval(() => {
 
 // Page input counts toward smart monitoring, like the desktop app's global input hook.
 let lastPing = 0;
-const ping = () => {
+const ping = (): void => {
   if (Date.now() - lastPing < 1000 || !chrome.runtime?.id) return;
   lastPing = Date.now();
   chrome.runtime.sendMessage({ type: 'input' }).catch(() => {});

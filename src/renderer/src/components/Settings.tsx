@@ -52,16 +52,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
   }, []);
 
   useEffect(() => {
-    refreshLibrary();
-  }, [refreshLibrary]);
+    let current = true;
+    window.api.getMediaLibrary().then((lib) => { if (current) setMediaLibrary(lib); });
+    return () => { current = false; };
+  }, []);
 
-  useEffect(() => {
+  // When settings change elsewhere (another tab, the tray, the scheduler), follow them. This
+  // adjusts state while rendering, React's recommended alternative to syncing in an effect.
+  const [syncedSettings, setSyncedSettings] = useState(settings);
+  if (settings !== syncedSettings) {
+    setSyncedSettings(settings);
     setWorkDuration(settings.workDuration);
     setBreakDuration(settings.breakDuration);
     setSnoozeDuration(settings.snoozeDuration);
     setCustomVideoPath(settings.customVideoPath);
     setMediaLibrary(settings.mediaLibrary);
-  }, [settings]);
+  }
 
   useEffect(() => () => { soundPreviewRef.current?.pause(); }, []);
 
@@ -81,16 +87,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     return () => clearInterval(interval);
   }, []);
 
-  const handleGrantPermission = async () => {
+  const handleGrantPermission = async (): Promise<void> => {
     const granted = await window.api.requestPermission();
     setHasPermission(granted);
   };
 
-  const handleSave = (key: keyof AppSettings, value: any) => {
-    onSave({ [key]: value });
+  const handleSave = <K extends keyof AppSettings>(key: K, value: AppSettings[K]): void => {
+    onSave({ [key]: value } as Partial<AppSettings>);
   };
 
-  const handleSelectMedia = async () => {
+  const handleSelectMedia = async (): Promise<void> => {
     const newPath = await window.api.selectMedia();
     if (newPath) {
       setCustomVideoPath(newPath);
@@ -99,7 +105,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleSelectSkin = (skin: AvatarSkin) => {
+  const handleSelectSkin = (skin: AvatarSkin): void => {
     setCustomVideoPath(null);
     onSave({ customVideoPath: null, avatarSkin: skin });
   };
@@ -166,12 +172,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleSelectLibraryItem = (p: string) => {
+  const handleSelectLibraryItem = (p: string): void => {
     setCustomVideoPath(p);
     handleSave('customVideoPath', p);
   };
 
-  const handleDeleteLibraryItem = async (p: string, e: React.MouseEvent) => {
+  const handleDeleteLibraryItem = async (p: string, e: React.MouseEvent): Promise<void> => {
     e.stopPropagation();
     const newLib = await window.api.deleteMediaLibraryItem(p);
     setMediaLibrary(newLib);
@@ -181,7 +187,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleSelectSound = async () => {
+  const handleSelectSound = async (): Promise<void> => {
     const newPath = await window.api.selectSound();
     if (newPath) {
       setCustomSoundPath(newPath);
@@ -189,13 +195,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleResetSound = async () => {
+  const handleResetSound = async (): Promise<void> => {
     await window.api.resetSound();
     setCustomSoundPath(null);
     handleSave('customSoundPath', null);
   };
 
-  const handlePreviewSound = () => {
+  const handlePreviewSound = (): void => {
     if (!customSoundPath) return;
     if (isSoundPlaying && soundPreviewRef.current) {
       soundPreviewRef.current.pause();
@@ -211,18 +217,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     audio.onended = () => setIsSoundPlaying(false);
   };
 
-  const getSoundFilename = () => {
+  const getSoundFilename = (): string => {
     if (!customSoundPath) return 'Default Cute Chime';
     const parts = customSoundPath.split(/[/\\]/);
     return parts[parts.length - 1].replace(/^custom_sound_\d+/, '').replace(/^\.|^_/, '') || parts[parts.length - 1];
   };
 
   // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent): void => {
     e.preventDefault();
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent): Promise<void> => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file) {

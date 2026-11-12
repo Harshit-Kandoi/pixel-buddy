@@ -10,7 +10,9 @@ const SETTINGS_HEIGHT = 560;
 const root = document.getElementById('root')!;
 const toggle = document.getElementById('pages-enabled') as HTMLInputElement;
 
-const setPagesEnabled = (enabled: boolean) => chrome.storage.local.set({ [KEY_PAGES_ENABLED]: enabled });
+// For host methods this environment doesn't need.
+const noop = (): void => undefined;
+const setPagesEnabled = (enabled: boolean): Promise<void> => chrome.storage.local.set({ [KEY_PAGES_ENABLED]: enabled });
 void chrome.storage.local.get(KEY_PAGES_ENABLED).then(stored => { toggle.checked = stored[KEY_PAGES_ENABLED] !== false; });
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && KEY_PAGES_ENABLED in changes) toggle.checked = changes[KEY_PAGES_ENABLED].newValue !== false;
@@ -25,10 +27,10 @@ installApi(PORT_POPUP, {
     else Object.assign(root.style, { width: `${width}px`, height: `${height}px` });
   },
   setVisible(visible) { if (!visible) window.close(); },
-  setHitRects() {},
-  setSettingsVisible() {},
-  dragStart() {},
-  dragEnd() {},
+  setHitRects: noop,
+  setSettingsVisible: noop,
+  dragStart: noop,
+  dragEnd: noop,
   quit() {
     void setPagesEnabled(false);
     showNotice('Pixel Buddy is hidden on web pages. Switch "Show on pages" back on any time.');

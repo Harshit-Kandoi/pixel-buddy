@@ -1,13 +1,18 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { Scheduler } from '../scheduler';
+import type { SettingsManager } from '../settings';
+import type { ActivityMonitor } from '../activity';
+
+type MockSettings = SettingsManager & { save: Mock; getSettings: Mock };
+type MockActivity = ActivityMonitor & { start: Mock; stop: Mock; tick: Mock; getContinuousIdleSeconds: Mock; resetMinuteScore: Mock };
 import { APP_STATES, DEFAULT_SETTINGS } from '../../utils/constants';
 
 describe('Scheduler', () => {
-  let mockSettingsManager: any;
-  let mockActivityMonitor: any;
-  let onBreakDetectedCb: any;
-  let onIdleDetectedCb: any;
-  let onActiveResumedCb: any;
+  let mockSettingsManager: MockSettings;
+  let mockActivityMonitor: MockActivity;
+  let onBreakDetectedCb: () => void;
+  let onIdleDetectedCb: () => void;
+  let onActiveResumedCb: () => void;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -24,7 +29,7 @@ describe('Scheduler', () => {
         snoozeDuration: 1, // 1 minute = 60s
         skipDuration: 1, // 1 minute = 60s
       }),
-    };
+    } as unknown as MockSettings;
 
     mockActivityMonitor = {
       start: vi.fn().mockImplementation((onBreak, onIdle, onResume) => {
@@ -36,7 +41,7 @@ describe('Scheduler', () => {
       tick: vi.fn().mockReturnValue({ isActiveThisSecond: false }),
       getContinuousIdleSeconds: vi.fn().mockReturnValue(0),
       resetMinuteScore: vi.fn(),
-    };
+    } as unknown as MockActivity;
   });
 
   afterEach(() => {

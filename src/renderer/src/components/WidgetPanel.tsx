@@ -24,7 +24,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
   const progressPercent = Math.min(100, (activeWorkSeconds / totalWorkSeconds) * 100);
 
   // Time remaining string until next break
-  const getRemainingTimeStr = () => {
+  const getRemainingTimeStr = (): string => {
     if (state === 'SNOOZE') {
       const mins = Math.floor(snoozeSecondsLeft / 60);
       const secs = snoozeSecondsLeft % 60;
@@ -41,7 +41,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getWaterRemainingTimeStr = () => {
+  const getWaterRemainingTimeStr = (): string => {
     if (!hydrationEnabled) return 'Disabled';
     const leftSeconds = stateData.hydrationSecondsLeft;
     const mins = Math.floor(leftSeconds / 60);
@@ -49,7 +49,7 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleWaterClick = (index: number) => {
+  const handleWaterClick = (index: number): void => {
     // If they click on a glass:
     // If the glass was previously unchecked, we set drank count to this glass index + 1
     // If they click on the last checked glass, we decrement by 1 (toggle)
@@ -61,11 +61,11 @@ export const WidgetPanel: React.FC<WidgetPanelProps> = ({
     onSaveSettings({ hydrationDrankToday: newCount });
   };
 
-  const incrementWater = () => {
+  const incrementWater = (): void => {
     window.api.logHydration();
   };
 
-  const decrementWater = () => {
+  const decrementWater = (): void => {
     const newCount = Math.max(0, hydrationDrankToday - 1);
     onSaveSettings({ hydrationDrankToday: newCount });
   };

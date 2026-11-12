@@ -9,7 +9,9 @@ import { FRAME_TAG, KEY_PAGES_ENABLED, KEY_POSITION, PORT_PAGE, type FrameMessag
 // the app's box in the page corner, so if it ever fails to render it can only cover that
 // box. While dragging, the frame briefly covers the viewport and the app moves inside it:
 // a frame that moves under the pointer gets unreliable pointer coordinates.
-const post = (message: FrameMessage) => window.parent.postMessage({ [FRAME_TAG]: message }, '*');
+// For host methods this environment doesn't need.
+const noop = (): void => undefined;
+const post = (message: FrameMessage): void => window.parent.postMessage({ [FRAME_TAG]: message }, '*');
 const root = document.getElementById('root')!;
 const UI_SELECTOR = '.buddy-container, .speech-bubble, .widget-panel, .side-controls, .settings-trigger, .display-close, .settings-panel';
 const DEFAULT_POSITION: Position = { right: 0, bottom: 0 };
@@ -21,14 +23,14 @@ let dragging = false;
 let pressedAt = { x: 0, y: 0 };
 let dragFrom = DEFAULT_POSITION;
 
-const clamp = (value: number, max: number) => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
+const clamp = (value: number, max: number): number => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
 // Only meaningful while the frame covers the viewport; otherwise the content script clamps.
 const clampToViewport = (p: Position): Position => ({
   ...p,
   right: clamp(p.right, window.innerWidth - size.width),
   bottom: clamp(p.bottom, window.innerHeight - size.height),
 });
-const expanded = () => window.innerWidth > size.width || window.innerHeight > size.height;
+const expanded = (): boolean => window.innerWidth > size.width || window.innerHeight > size.height;
 
 function layout(): void {
   // Unclamped while dragging, so the buddy can follow the pointer to the page edge.
@@ -66,8 +68,8 @@ installApi(PORT_PAGE, {
     layout();
   },
   setVisible: visible => post({ type: 'visible', visible }),
-  setHitRects() {},
-  setSettingsVisible() {},
+  setHitRects: noop,
+  setSettingsVisible: noop,
   dragStart: () => { dragging = true; dragFrom = position; layout(); },
   dragEnd: anchor => {
     if (expanded()) {

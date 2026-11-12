@@ -39,6 +39,15 @@ describe('festival calendar', () => {
     expect(resolveAvatarSkin('auto', at(2028, 9, 1))).toBe('onam');
   });
 
+  it('has every festival in every year through 2030', () => {
+    for (let year = 2027; year <= 2030; year++) {
+      for (const festival of FESTIVALS) {
+        const days = festival.annual ? [`${year}-${festival.annual}`] : (festival.dates ?? []).filter(d => d.startsWith(`${year}-`));
+        expect(days.length, `${festival.name} ${year}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('wears the classic look between festivals', () => {
     expect(resolveAvatarSkin('auto', at(2026, 11, 4, 23))).toBe('classic');
     expect(resolveAvatarSkin('auto', at(2026, 11, 12, 0))).toBe('classic');

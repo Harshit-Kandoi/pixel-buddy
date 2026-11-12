@@ -1,13 +1,14 @@
 import { powerMonitor, systemPreferences, ipcMain } from 'electron';
 import { ACTIVITY_WEIGHTS } from '../utils/constants';
 
-let uIOhook: any = null;
+let uIOhook: typeof import('uiohook-napi').uIOhook | null = null;
 let uiohookLoaded = false;
 
 // Try loading uiohook-napi dynamically
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const module = require('uiohook-napi');
+  // Optional native module: loaded with require so a failure falls back to powerMonitor.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const module = require('uiohook-napi') as typeof import('uiohook-napi');
   uIOhook = module.uIOhook;
   uiohookLoaded = true;
   console.log('uiohook-napi loaded successfully');
@@ -203,7 +204,7 @@ export class ActivityMonitor {
 
     // Accumulate time in the current minute
     this.secondsInCurrentMinute++;
-    let returnedMinuteScore = this.minuteScore;
+    const returnedMinuteScore = this.minuteScore;
 
     if (this.secondsInCurrentMinute >= 60) {
       // Reset minute stats

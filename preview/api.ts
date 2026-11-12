@@ -9,8 +9,10 @@ const updates = new Set<(data: StateMachineData) => void>();
 const ticks = new Set<(data: StateMachineData) => void>();
 const settingsUpdates = new Set<(settings: AppSettings) => void>();
 const showSettings = new Set<() => void>();
-const snapshot = () => ({ ...settings, mediaLibrary: [...settings.mediaLibrary] });
-const notify = (text: string) => { document.getElementById('preview-notice')!.textContent = text; };
+// For host methods this environment doesn't need.
+const noop = (): void => undefined;
+const snapshot = (): AppSettings => ({ ...settings, mediaLibrary: [...settings.mediaLibrary] });
+const notify = (text: string): void => { document.getElementById('preview-notice')!.textContent = text; };
 
 // Run the real timer logic against browser-only adapters; no Electron or filesystem access.
 const manager = {
@@ -21,12 +23,12 @@ const manager = {
   },
 } as unknown as SettingsManager;
 const activity = {
-  start() {}, stop() {}, resetMinuteScore() {},
+  start: noop, stop: noop, resetMinuteScore: noop,
   getContinuousIdleSeconds: () => 0,
   tick: () => ({ isActiveThisSecond: false, currentMinuteScore: 0 }),
 } as unknown as ActivityMonitor;
 const scheduler = new Scheduler(manager, activity, data => updates.forEach(callback => callback({ ...data })));
-const desktopOnly = () => { notify('That control needs the desktop app. The browser preview has no file, permission, or system access.'); };
+const desktopOnly = (): void => { notify('That control needs the desktop app. The browser preview has no file, permission, or system access.'); };
 const subscribe = <T>(listeners: Set<T>, callback: T) => { listeners.add(callback); return () => { listeners.delete(callback); }; };
 
 window.api = {
@@ -44,17 +46,17 @@ window.api = {
   onTick: callback => subscribe(ticks, callback),
   getPermissionStatus: async () => false,
   requestPermission: async () => { desktopOnly(); return false; },
-  setIgnoreMouseEvents() {},
+  setIgnoreMouseEvents: noop,
   resize(width, height) {
     const root = document.getElementById('root')!;
     root.style.width = `${width}px`; root.style.height = `${height}px`;
   },
   onShowSettings: callback => subscribe(showSettings, callback),
-  setSettingsVisible() {}, setHitRects() {},
+  setSettingsVisible: noop, setHitRects: noop,
   logHydration: () => scheduler.handleLogHydration(),
   snoozeHydration: () => scheduler.handleSnoozeHydration(),
   dismissHydration: () => scheduler.handleDismissHydration(),
-  dragStart: desktopOnly, dragMove() {}, dragEnd() {},
+  dragStart: desktopOnly, dragMove: noop, dragEnd: noop,
   selectMedia: async () => { desktopOnly(); return null; },
   getPathForFile: () => { desktopOnly(); return ''; },
   saveCustomMedia: async () => { desktopOnly(); return null; },
@@ -66,7 +68,7 @@ window.api = {
   quit: desktopOnly,
   isOnBattery: async () => false,
   onPowerChange: () => () => {},
-  showWindow() {}, hideWindow() {},
+  showWindow: noop, hideWindow: noop,
 };
 
 export const preview = {

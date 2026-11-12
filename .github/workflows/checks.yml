@@ -1,0 +1,31 @@
+name: Checks
+# Every pull request: lint, type checks, unit tests, and a heads-up when moon-based festival
+# dates are about to run out. Cheap (one Linux runner, no Electron download). To require it
+# before merging, add "Require status checks to pass" with the "checks" job to the main ruleset.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Festival dates (warns, never fails)
+        run: node scripts/check-festival-dates.mjs
+      - run: node scripts/check-website.mjs

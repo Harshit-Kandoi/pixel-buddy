@@ -52,8 +52,11 @@ jobs:
           cache: npm
       # Unit tests only need the JavaScript dependencies, not Electron's native rebuild.
       - run: npm ci --ignore-scripts
+      - run: npm run lint
       - run: npm test
       - run: npm run typecheck
+      - name: Festival dates (warns, never fails)
+        run: node scripts/check-festival-dates.mjs
       - name: Pick the version
         id: next
         run: node scripts/next-version.mjs --notes --bump "${{ inputs.bump || 'auto' }}"

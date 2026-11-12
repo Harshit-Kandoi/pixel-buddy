@@ -37,7 +37,7 @@ These builds have no trusted publisher signature or Apple notarization. macOS Ga
 - Turn off smart monitoring to use regular timers. In that mode, mouse activity does not interrupt a break.
 - Track glasses of water and set your reminder interval. **Dashboard → + Add a glass** logs water you drank away from the computer. Daily counters reset at midnight, including when the app stays open.
 - **Dashboard → Share my day** saves or copies a picture of today's focus time, breaks, and water, sized for social posts.
-- Limited-time festival buddies: during a festival the buddy turns into that festival's character (New Year, Sankranti & Pongal, Lunar New Year, Eid, Holi, Onam, Halloween, Diwali, Christmas). Take 3 breaks while it lasts to claim it and keep it; otherwise it's gone until next year. Festival dates live in `src/utils/seasons.ts` (mirrored in `website/dist/festivals.mjs`, kept in sync by a test); add future years for the lunar festivals there.
+- Limited-time festival buddies: during a festival the buddy turns into that festival's character (New Year, Sankranti & Pongal, Lunar New Year, Eid, Holi, Onam, Halloween, Diwali, Christmas). Take 3 breaks while it lasts to claim it and keep it; otherwise it's gone until next year. Festival dates live in `src/utils/seasons.ts` (mirrored in `website/dist/festivals.mjs`, kept in sync by a test) and run through 2030. Moon-based festivals need their dates added by hand: `node scripts/check-festival-dates.mjs` (run on every pull request and release) shows a warning once any festival has less than 9 months of dates left. Festive animations play for a few seconds when the buddy wakes or while you hover over it, then hold still, since an animating outfit costs about 3× the CPU of the float alone.
 - Start with the illustrated robot mascot. Drop a PNG, GIF, WebP, JPG, AVIF, SVG, MP4, MOV, or WebM onto the buddy, or select one in settings. Use your own alarm sound and colors.
 - Light on battery: after 20 seconds with nothing happening the buddy rests. It stops floating, festival outfits hold still, video avatars pause and animated GIFs hold their frame, with one gentle bob every 45 seconds. Reminders, breaks, clicks, and hovering over the buddy wake it. Measured on a MacBook, an idle resting buddy uses about 1–2% of one CPU core (classic, festival, or video avatar), down from 12% (classic) and 40% (festival). On battery power, the desktop app suggests a picture, GIF, or the classic buddy instead of a video.
 - For a see-through custom avatar, use a file with a real transparent background (or a green-screen video). Many "transparent" downloads have the checkerboard drawn into the picture; settings detect that and explain how to remove the background (macOS: right-click in Finder → Quick Actions → Remove Background; Windows 11: Paint → Remove background).
@@ -47,7 +47,7 @@ On macOS, optional smart monitoring uses Accessibility permission: **System Sett
 
 ## Develop
 
-Use Node.js 22 LTS with npm.
+Use Node.js 22 LTS with npm. `npm run lint` must pass with no errors: the **Checks** workflow runs lint, type checks, unit tests, and the festival-date warning on every pull request (add it as a required status check in the `main` ruleset to enforce it).
 
 ```bash
 npm ci

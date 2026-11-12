@@ -5,7 +5,7 @@ import { Timer } from './components/Timer';
 import { Settings } from './components/Settings';
 import { WidgetPanel } from './components/WidgetPanel';
 import { AppSettings, BuddyAnchor, StateMachineData } from '../../utils/types';
-import { getRandomTip, getRandomBuddyLine, FESTIVE_LINES } from '../../utils/quotes';
+import { BREAK_TIPS, getRandomBuddyLine, FESTIVE_LINES } from '../../utils/quotes';
 import { CLAIM_BREAKS, claimStatus, resolveAvatarSkin } from '../../utils/seasons';
 import { avatarSrc } from './avatars';
 import { isImageFile } from '../../utils/mediaFormats';
@@ -19,6 +19,10 @@ const IN_EXTENSION = location.protocol === 'chrome-extension:';
 const REST_AFTER_MS = 20000;
 const BOB_EVERY_MS = 45000;
 const BOB_MS = 2400;
+// Festival outfits (flame, twinkles, confetti) redraw the whole picture every frame while they
+// animate, about 3× the CPU of the float alone. They play for a few seconds whenever the buddy
+// wakes, then hold still while it keeps floating.
+const FESTIVE_ANIMATION_MS = 6000;
 const IS_EDGE = /\bEdg\//.test(navigator.userAgent);
 // Where "Rate" goes: the store this copy most likely came from (Edge users can install from the
 // Chrome Web Store until the Edge listing exists); the desktop app asks for a GitHub star instead.
@@ -58,7 +62,6 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const [showSettings, setShowSettings] = useState(initialShowSettings);
   const [showWidgets, setShowWidgets] = useState(false);
   const [widgetsClosing, setWidgetsClosing] = useState(false);
-  const [currentTip, setCurrentTip] = useState('');
   
   // Interactive click & dismiss elements
   const [clickedDialogue, setClickedDialogue] = useState<string | null>(null);
@@ -71,6 +74,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const [resting, setResting] = useState(false);
   const [bobbing, setBobbing] = useState(false);
   const lastLivelyRef = useRef(0); // set by the wake effect on mount
+  const [festiveAnimating, setFestiveAnimating] = useState(true);
+  const festiveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Drag and click tracking refs
   const dragThreshold = 5;
@@ -93,16 +98,11 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     return undefined;
   }, [clickedDialogue]);
 
-  useEffect(() => {
-    if (showHydrationReminder) setIsDismissed(false);
-  }, [showHydrationReminder]);
-
-  // Auto-reset dismissal if settings are opened
-  useEffect(() => {
-    if (showSettings) {
-      setIsDismissed(false);
-    }
-  }, [showSettings]);
+  // Opening settings always shows the buddy again, even if it was hidden.
+  const openSettings = useCallback((): void => {
+    setShowSettings(true);
+    setIsDismissed(false);
+  }, []);
 
   // Sync settings panel visibility to main process for hit-testing
   useEffect(() => {
@@ -113,7 +113,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   // (fixed-size, transparent) window stays click-through.
   useEffect(() => {
     let last = '';
-    const report = () => {
+    const report = (): void => {
       const rects = Array.from(document.querySelectorAll<HTMLElement>(HIT_SELECTOR)).map((el) => {
         const r = el.getBoundingClientRect();
         return { x: Math.floor(r.left) - 4, y: Math.floor(r.top) - 4, width: Math.ceil(r.width) + 8, height: Math.ceil(r.height) + 8 };
@@ -146,6 +146,15 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     window.api.getState().then((state) => setStateData(state));
 
     // Listen to scheduler updates
+    // A water reminder that appears also shows the buddy again, even if it was hidden.
+    const showsWater = (d: StateMachineData | null): boolean =>
+      !!d?.hydrationReminderActive && d.state !== 'POPUP' && d.state !== 'BREAK';
+    const receive = (data: StateMachineData): void => {
+      if (showsWater(data) && !showsWater(stateDataRef.current)) setIsDismissed(false);
+      stateDataRef.current = data;
+      setStateData(data);
+    };
+
     const unsubscribeUpdate = window.api.onUpdate((data) => {
       // Play chime or warning sound on popup transition
       const previousState = stateDataRef.current?.state;
@@ -165,21 +174,16 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
           }
         }
       }
-      stateDataRef.current = data;
-      setStateData(data);
+      receive(data);
     });
 
-    const unsubscribeTick = window.api.onTick((data) => {
-      setStateData(data);
-    });
+    const unsubscribeTick = window.api.onTick(receive);
 
     const unsubscribeSettings = window.api.onSettingsUpdated((newSettings) => {
       setSettings(newSettings);
     });
 
-    const unsubscribeShowSettings = window.api.onShowSettings(() => {
-      setShowSettings(true);
-    });
+    const unsubscribeShowSettings = window.api.onShowSettings(openSettings);
 
     return () => {
       unsubscribeUpdate();
@@ -187,7 +191,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
       unsubscribeSettings();
       unsubscribeShowSettings();
     };
-  }, []);
+  }, [openSettings]); // stable (useCallback with no dependencies), so this still runs once
 
   // Auto-reshow if state transitions to POPUP or BREAK
   useEffect(() => {
@@ -254,7 +258,11 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const wake = useCallback((): void => {
     lastLivelyRef.current = Date.now();
     setResting(false);
+    setFestiveAnimating(true);
+    clearTimeout(festiveTimerRef.current);
+    festiveTimerRef.current = setTimeout(() => setFestiveAnimating(false), FESTIVE_ANIMATION_MS);
   }, []);
+  useEffect(() => () => clearTimeout(festiveTimerRef.current), []);
   useEffect(() => {
     lastLivelyRef.current = Date.now();
     const id = setTimeout(wake, 0); // wake on the next tick, not mid-render
@@ -306,17 +314,6 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     }
   }, [settings]);
 
-  // Handle tip rotation during break
-  useEffect(() => {
-    if (stateData?.state === 'BREAK') {
-      setCurrentTip(getRandomTip());
-      const tipInterval = setInterval(() => {
-        setCurrentTip(getRandomTip());
-      }, 15000); // change tip every 15 seconds
-      return () => clearInterval(tipInterval);
-    }
-    return undefined;
-  }, [stateData?.state]);
 
   // Calculate window visibility based on states, settings, and manual dismissals
   const isWindowVisible = 
@@ -349,11 +346,11 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     }
   }, [showSettings]);
 
-  const handleSaveSettings = (newSettings: Partial<AppSettings>) => {
+  const handleSaveSettings = (newSettings: Partial<AppSettings>): void => {
     window.api.saveSettings(newSettings);
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.MouseEvent): void => {
     // Prevent dragging when clicking interactive buttons, inputs, dropdowns or sliders
     const target = e.target as HTMLElement;
     if (
@@ -372,7 +369,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     isDragging.current = false;
     isDragActive.current = true;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const handleMouseMove = (moveEvent: MouseEvent): void => {
       const dx = moveEvent.screenX - dragStartPos.current.x;
       const dy = moveEvent.screenY - dragStartPos.current.y;
       if (Math.hypot(dx, dy) > dragThreshold) {
@@ -384,7 +381,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
       // NOTE: NO dragMove() IPC call here — main process polls cursor directly
     };
 
-    const finish = (allowClick: boolean) => {
+    const finish = (allowClick: boolean): void => {
       if (!isDragActive.current) return;
       isDragActive.current = false;
       endPress.current = null;
@@ -397,8 +394,8 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
         handleBuddyClick();
       }
     };
-    const handleMouseUp = () => finish(true);
-    const handleBlur = () => finish(false);
+    const handleMouseUp = (): void => finish(true);
+    const handleBlur = (): void => finish(false);
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
@@ -406,7 +403,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     endPress.current = () => finish(false);
   };
 
-  const toggleWidgets = () => {
+  const toggleWidgets = (): void => {
     if (!showWidgets) {
       setShowWidgets(true);
       return;
@@ -420,7 +417,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     }, 240);
   };
 
-  const handleBuddyClick = () => {
+  const handleBuddyClick = (): void => {
     // During POPUP state: don't replace the break notification — just play a small chime
     // and show a relevant nudge, keeping action buttons visible
     if (stateDataRef.current?.state === 'POPUP') {
@@ -446,7 +443,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     }, 600);
   };
 
-  const handleFileDrop = async (filePath: string) => {
+  const handleFileDrop = async (filePath: string): Promise<void> => {
     const copiedPath = await window.api.saveCustomMedia(filePath);
     if (copiedPath) {
       handleSaveSettings({ customVideoPath: copiedPath });
@@ -461,10 +458,13 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     return <div style={{ display: 'none' }} />;
   }
 
-  // The buddy leads a short routine through the first minute or so of each break.
+  // The buddy leads a short routine through the first minute or so of each break, then a new
+  // tip every 15 seconds (worked out from the time, so every tab shows the same one).
+  const breakElapsed = settings.breakDuration * 60 - stateData.breakSecondsLeft;
   const breakStep = stateData.state === 'BREAK'
-    ? stepAt(routineForBreak(settings.statsBreaksCompletedToday ?? 0), settings.breakDuration * 60 - stateData.breakSecondsLeft)
+    ? stepAt(routineForBreak(settings.statsBreaksCompletedToday ?? 0), breakElapsed)
     : null;
+  const breakTip = BREAK_TIPS[(Math.floor(breakElapsed / 15) + (settings.statsBreaksCompletedToday ?? 0) * 3) % BREAK_TIPS.length];
 
   // Festival buddies are limited-time: take enough breaks during the festival to claim one.
   const claim = claimStatus(settings);
@@ -520,7 +520,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
               state={stateData.state} 
               skipsCount={stateData.skipsCount} 
               workDuration={settings.workDuration}
-              tip={breakStep ? breakStep.step.text : currentTip}
+              tip={breakStep ? breakStep.step.text : breakTip}
               breakTitle={breakStep?.routine.title}
               customDialogue={
                 clickedDialogue || 
@@ -549,7 +549,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                   </button>
                   <button type="button" aria-label="Open settings"
                     className="settings-trigger non-draggable"
-                    onClick={() => setShowSettings(true)}
+                    onClick={openSettings}
                     title="Open Settings"
                   >
                     ⚙
@@ -666,7 +666,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
               <div className="side-controls">
                 <button type="button" aria-label="Open settings"
                   className="side-btn side-settings non-draggable"
-                  onClick={() => setShowSettings(true)}
+                  onClick={openSettings}
                   title="Open Settings"
                 >
                   ⚙
@@ -694,7 +694,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
             <Buddy 
               state={stateData.state} 
               customVideoPath={settings.customVideoPath}
-              defaultSrc={avatarSrc(resolveAvatarSkin(settings.avatarSkin, new Date(), settings.claimedSkins), resting && !bobbing)}
+              defaultSrc={avatarSrc(resolveAvatarSkin(settings.avatarSkin, new Date(), settings.claimedSkins), !festiveAnimating || (resting && !bobbing))}
               resting={resting}
               keyingMode={settings.keyingMode}
               debugKeyer={settings.debugKeyer}

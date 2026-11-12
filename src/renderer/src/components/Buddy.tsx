@@ -157,7 +157,10 @@ export const Buddy: React.FC<BuddyProps> = ({
   onFileDrop,
   resting = false,
 }) => {
-  const [videoError, setVideoError] = useState(false);
+  // Remember which source failed: switching file or keying mode clears the error by itself.
+  const sourceKey = `${customVideoPath}|${keyingMode}|${debugKeyer}`;
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const videoError = failedSource === sourceKey;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const glStateRef = useRef<GLState | null>(null);
@@ -209,7 +212,6 @@ export const Buddy: React.FC<BuddyProps> = ({
   useEffect(() => {
     bgTickRef.current = 0;
     glStateRef.current = null;
-    setVideoError(false); // will be re-created in next effect run
   }, [customVideoPath, keyingMode, debugKeyer]);
 
   useEffect(() => {
@@ -233,7 +235,7 @@ export const Buddy: React.FC<BuddyProps> = ({
     const schedule = (): void => {
       rafRef.current = withFrames ? video.requestVideoFrameCallback(draw) : requestAnimationFrame(draw);
     };
-    const draw = () => {
+    const draw = (): void => {
       schedule();
 
       if (!video || video.readyState < 2) return; // video not decoded yet
@@ -320,7 +322,7 @@ export const Buddy: React.FC<BuddyProps> = ({
 
   const svgShadow = { filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.35))' };
 
-  const renderFallback = () => {
+  const renderFallback = (): React.JSX.Element => {
     switch (state) {
       case 'BREAK':
         return (
@@ -373,8 +375,8 @@ export const Buddy: React.FC<BuddyProps> = ({
     display: 'block',
   };
 
-  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent): void => e.preventDefault();
+  const handleDrop = (e: React.DragEvent): void => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file && onFileDrop) {
@@ -402,7 +404,7 @@ export const Buddy: React.FC<BuddyProps> = ({
             className="buddy-media"
             style={mediaCss}
             alt="Buddy Companion"
-            onError={() => { console.warn('Image load failed, falling back.'); setVideoError(true); }}
+            onError={() => { console.warn('Image load failed, falling back.'); setFailedSource(sourceKey); }}
           />
         ) : (
           <>
@@ -414,7 +416,7 @@ export const Buddy: React.FC<BuddyProps> = ({
               muted
               playsInline
               crossOrigin="anonymous"
-              onError={() => { console.warn('Video load failed, falling back.'); setVideoError(true); }}
+              onError={() => { console.warn('Video load failed, falling back.'); setFailedSource(sourceKey); }}
             />
             <canvas ref={canvasRef} className="buddy-media" style={mediaCss} />
           </>

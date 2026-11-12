@@ -87,7 +87,7 @@ function handleIdleState(state: `${chrome.idle.IdleState}`): void {
 let restoring = true; // swallow side effects while start-up rebuilds the saved state
 let lastState: StateMachineData | null = null;
 const scheduler = new Scheduler(manager, activity, handleChange);
-const machine = () => scheduler.getStateMachine();
+const machine = (): ReturnType<Scheduler['getStateMachine']> => scheduler.getStateMachine();
 
 let pendingUpdate: StateMachineData | null = null;
 function handleChange(data: StateMachineData): void {
@@ -157,7 +157,7 @@ const ready = (async () => {
 
 let badge = '';
 function updateBadge(data: StateMachineData): void {
-  const minutes = (seconds: number) => `${Math.max(1, Math.ceil(seconds / 60))}m`;
+  const minutes = (seconds: number): string => `${Math.max(1, Math.ceil(seconds / 60))}m`;
   let text: string, color: string, title: string;
   if (data.isPaused) [text, color, title] = ['||', '#64748b', 'Reminders paused'];
   else if (data.state === APP_STATES.POPUP) [text, color, title] = ['!', '#f59e0b', 'Time for a break'];
@@ -198,7 +198,7 @@ async function playSound(kind: 'chime' | 'worried'): Promise<void> {
 }
 
 // Ports are only open from tabs the user can see, so none means the buddy is out of sight.
-const buddyInView = () => [...ports].some(port => port.name === PORT_PAGE);
+const buddyInView = (): boolean => [...ports].some(port => port.name === PORT_PAGE);
 
 function remindBreak(data: StateMachineData): void {
   void playSound(data.skipsCount >= 3 ? 'worried' : 'chime');
@@ -263,7 +263,7 @@ function handleCall(message: Call): unknown {
   }
 }
 
-const fromExtensionPage = (sender: chrome.runtime.MessageSender) => !!sender.url?.startsWith(extensionOrigin);
+const fromExtensionPage = (sender: chrome.runtime.MessageSender): boolean => !!sender.url?.startsWith(extensionOrigin);
 
 chrome.runtime.onMessage.addListener((message: Call, sender, sendResponse) => {
   if (typeof message?.type !== 'string') return false;
