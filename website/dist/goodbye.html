@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorry to see you go · Pixel Buddy</title>
+<meta name="description" content="One quick question after uninstalling Pixel Buddy.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/buddy.svg"><link rel="stylesheet" href="style.css">
+<style>
+.bye{max-width:620px;padding-block:56px 80px}.bye h1{font-size:40px;line-height:1.1;letter-spacing:-1.2px;margin:12px 0 8px}
+.bye p{font-size:15px;color:var(--ink)}.bye .muted{color:var(--muted);font-size:13px}
+.bye form{display:grid;gap:10px;margin-top:24px}
+.bye fieldset{border:0;padding:0;margin:0;display:grid;gap:8px}
+.bye legend{font-weight:700;margin-bottom:6px}
+.bye label.reason{display:flex;gap:10px;align-items:center;padding:12px 14px;border:1px solid rgba(0,0,0,.12);border-radius:12px;cursor:pointer;background:#fff}
+.bye label.reason:has(input:checked){border-color:currentColor;box-shadow:0 0 0 1px currentColor}
+.bye textarea{width:100%;min-height:84px;padding:12px;border-radius:12px;border:1px solid rgba(0,0,0,.15);font:inherit;resize:vertical;box-sizing:border-box}
+.bye .hidden{display:none}.bye a{text-decoration:underline}
+.bye .thanks{padding:20px;border-radius:14px;background:rgba(34,160,107,.1);border:1px solid rgba(34,160,107,.3)}
+</style>
+</head>
+<body>
+<header class="nav wrap"><a class="brand" href="index.html" aria-label="Pixel Buddy home"><img src="assets/buddy.svg" alt="" width="38" height="40">pixel buddy<span class="brand-dot">.</span></a><a class="button small" href="index.html#download">Get your buddy <span>↗</span></a></header>
+<main class="bye wrap">
+<span class="eyebrow">THANKS FOR TRYING PIXEL BUDDY</span>
+<h1>Sorry to see you go.</h1>
+<p>One quick question helps make the buddy better for the next person. It's anonymous: no name, no email, nothing about your browser.</p>
+
+<!-- Netlify Forms collects the answers (Site configuration → Forms in Netlify). -->
+<form id="survey" name="uninstall" method="POST" data-netlify="true" netlify-honeypot="company" action="goodbye.html?sent=1">
+<input type="hidden" name="form-name" value="uninstall">
+<input type="hidden" name="version" id="version">
+<p class="hidden"><label>Leave this empty <input name="company"></label></p>
+<fieldset>
+<legend>Why did you remove it?</legend>
+<label class="reason"><input type="radio" name="reason" value="too-often" required> Reminders came too often, or at bad times</label>
+<label class="reason"><input type="radio" name="reason" value="in-the-way"> The buddy got in the way on websites</label>
+<label class="reason"><input type="radio" name="reason" value="slow"> It used too much battery or slowed my browser</label>
+<label class="reason"><input type="radio" name="reason" value="desktop-app"> I'm using the desktop app instead</label>
+<label class="reason"><input type="radio" name="reason" value="just-trying"> I was just trying it out</label>
+<label class="reason"><input type="radio" name="reason" value="other"> Something else</label>
+</fieldset>
+<label for="details" class="muted">Anything else? (optional)</label>
+<textarea id="details" name="details" maxlength="1000" placeholder="What would have made you keep it?"></textarea>
+<button class="button" type="submit">Send</button>
+<p class="muted">Changed your mind? <a href="https://chromewebstore.google.com/detail/pixel-buddy/ikggibbkgbebflafmlaihlmdpibpdggc">Add it back to Chrome</a> or <a href="index.html#download">get the desktop app</a>.</p>
+</form>
+
+<div id="thanks" class="thanks hidden" role="status">
+<p><strong>Thank you!</strong> Your answer was sent. Take care of those eyes and shoulders. 🌱</p>
+<p class="muted">Want to say more? <a href="https://github.com/Harshit-Kandoi/pixel-buddy/issues">Open an issue on GitHub</a>.</p>
+</div>
+</main>
+<footer class="wrap"><a class="brand" href="index.html">pixel buddy.</a><span>Made for a little more balance. Free to share.</span><a href="https://github.com/Harshit-Kandoi/pixel-buddy">Made by Harshit Kandoi ↗</a></footer>
+<script>
+// The extension opens this page with ?v=<version> when it's removed.
+const params = new URLSearchParams(location.search);
+document.getElementById('version').value = (params.get('v') || '').slice(0, 20);
+const form = document.getElementById('survey');
+const thanks = document.getElementById('thanks');
+const done = () => { form.classList.add('hidden'); thanks.classList.remove('hidden'); };
+if (params.has('sent')) done();
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    const response = await fetch('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(new FormData(form)).toString(),
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    done();
+  } catch {
+    // Not served by Netlify (e.g. a local preview): say so instead of pretending it was sent.
+    thanks.innerHTML = '<p><strong>Thanks!</strong> This copy of the site can\'t receive answers. You can <a href="https://github.com/Harshit-Kandoi/pixel-buddy/issues">tell us on GitHub</a> instead.</p>';
+    done();
+  }
+});
+</script>
+</body>
+</html>

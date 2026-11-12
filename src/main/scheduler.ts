@@ -2,7 +2,7 @@ import { StateMachine, StateMachineData } from './stateMachine';
 import { recordFestivalBreak } from '../utils/seasons';
 import type { ActivityMonitor } from './activity';
 import type { SettingsManager } from './settings';
-import { APP_STATES } from '../utils/constants';
+import { APP_STATES, awaySecondsFor } from '../utils/constants';
 
 // During a break, smart monitoring ends the break when you come back to work. Coming back
 // means steady input, not a single mouse nudge: this many active seconds within the window.
@@ -21,6 +21,7 @@ export class Scheduler {
   private breakGraceTicks = 0;
   private buddyHoldTicks = 0;
   private breakActivity: boolean[] = []; // recent seconds of the break: active or not
+  private inMeeting = false; // on a call: reminders wait, and sitting still isn't being away
 
   constructor(
     settingsManager: SettingsManager,
@@ -47,14 +48,15 @@ export class Scheduler {
 
     // Start activity tracking
     this.activityMonitor.start(
-      // On long break detected (user was away for 5+ minutes and just returned)
+      // On long break detected (user was away for the away time and just returned)
       () => {
+        if (this.inMeeting) return; // listening on a call isn't a break
         console.log('Smart Reset: User completed an offline break. Resetting work timer.');
         this.handleReset();
       },
-      // On went idle (no activity for 5 minutes)
+      // On went idle (no input for the away time)
       () => {
-        if (this.stateMachine.getState() === APP_STATES.WORKING) {
+        if (this.stateMachine.getState() === APP_STATES.WORKING && !this.inMeeting) {
           this.stateMachine.transitionTo(APP_STATES.IDLE);
         }
       },
@@ -90,17 +92,22 @@ export class Scheduler {
     if (stateData.isPaused) return;
 
     // 1. Tick the activity monitor
+    const awaySeconds = awaySecondsFor(settings.awayMinutes);
     const { isActiveThisSecond } = this.activityMonitor.tick(
       stateData.state === APP_STATES.WORKING || stateData.state === APP_STATES.IDLE,
-      settings.smartMonitoringEnabled
+      settings.smartMonitoringEnabled,
+      awaySeconds
     );
     // Activity callbacks can change the state during this tick.
     stateData = this.stateMachine.getData();
     const state = this.stateMachine.getState();
 
+    // On a call, each countdown stops one second short and waits for the call to end.
+    const holding = (secondsLeft: number): boolean => this.inMeeting && secondsLeft <= 1;
+
     // 2. Hydration countdown (ticking when working or snoozed, and enabled)
     if (settings.hydrationEnabled && (state === APP_STATES.WORKING || state === APP_STATES.SNOOZE)) {
-      if (stateData.hydrationSecondsLeft > 0) {
+      if (stateData.hydrationSecondsLeft > 0 && !holding(stateData.hydrationSecondsLeft)) {
         this.stateMachine.decrementHydrationSeconds(1);
         if (this.stateMachine.getData().hydrationSecondsLeft === 0) {
           console.log('Hydration reminder triggered.');
@@ -114,15 +121,15 @@ export class Scheduler {
       case APP_STATES.WORKING: {
         // Handle skip countdown if active
         if (stateData.skipSecondsLeft > 0) {
-          this.stateMachine.decrementSkipSeconds(1);
+          if (!holding(stateData.skipSecondsLeft)) this.stateMachine.decrementSkipSeconds(1);
           if (this.stateMachine.getData().skipSecondsLeft === 0) {
             this.stateMachine.transitionTo(APP_STATES.POPUP);
           }
         } else {
           // Normal work accumulation
-          // Increment work timer only if user is NOT idle (idle duration < 5 mins)
+          // Count focus time unless you're away (time on a call counts)
           const idleSeconds = this.activityMonitor.getContinuousIdleSeconds();
-          if (idleSeconds < 300) {
+          if (idleSeconds < awaySeconds || this.inMeeting) {
             this.stateMachine.incrementWorkTime(1);
             
             const currentWorkSecs = this.stateMachine.getData().activeWorkSeconds;
@@ -132,7 +139,7 @@ export class Scheduler {
             }
             
             const targetWorkSeconds = settings.workDuration * 60;
-            if (this.stateMachine.getData().activeWorkSeconds >= targetWorkSeconds) {
+            if (this.stateMachine.getData().activeWorkSeconds >= targetWorkSeconds && !this.inMeeting) {
               this.stateMachine.transitionTo(APP_STATES.POPUP);
             }
           }
@@ -182,7 +189,7 @@ export class Scheduler {
 
       case APP_STATES.SNOOZE: {
         // Count down the snooze period
-        this.stateMachine.decrementSnoozeSeconds(1);
+        if (!holding(stateData.snoozeSecondsLeft)) this.stateMachine.decrementSnoozeSeconds(1);
         if (this.stateMachine.getData().snoozeSecondsLeft === 0) {
           this.stateMachine.transitionTo(APP_STATES.POPUP);
         }
@@ -195,7 +202,19 @@ export class Scheduler {
     }
   }
 
-  // User Action: Take Break
+  /**
+   * A call or meeting started or ended. During one, break and water reminders wait (they appear
+   * once it ends) and sitting still doesn't count as being away. Time on the call is focus time.
+   */
+  public setInMeeting(active: boolean): void {
+    if (active === this.inMeeting) return;
+    this.inMeeting = active;
+    // Away time counts from the start or end of the call, not from your last keystroke.
+    this.activityMonitor.markActive();
+    if (active && this.stateMachine.getState() === APP_STATES.IDLE) this.stateMachine.transitionTo(APP_STATES.WORKING);
+    this.stateMachine.setInMeeting(active);
+  }
+
   /** The user is using Pixel Buddy itself (clicking it, settings); that isn't coming back to work. */
   public handleBuddyInteraction(): void {
     if (this.stateMachine.getState() !== APP_STATES.BREAK) return;
@@ -255,6 +274,7 @@ export class Scheduler {
     if (settings.hydrationEnabled !== previous.hydrationEnabled || settings.hydrationInterval !== previous.hydrationInterval) {
       this.handleDismissHydration();
     }
+    if (!settings.meetingAware) this.setInMeeting(false);
     if (!settings.smartMonitoringEnabled && this.stateMachine.getState() === APP_STATES.IDLE) {
       this.stateMachine.transitionTo(APP_STATES.WORKING);
     }

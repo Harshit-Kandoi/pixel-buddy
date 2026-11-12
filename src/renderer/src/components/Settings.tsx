@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppSettings } from '../../../utils/types';
+import { AWAY_MINUTE_CHOICES } from '../../../utils/constants';
 import { toMediaUrl } from '../../../utils/mediaUrl';
 import { AVATAR_SKINS } from '../avatars';
 import { drawShareCard, downloadBlob } from '../shareCard';
 import { FORMAT_GUIDE, SUPPORTED_FORMATS_TEXT, formatHint, isImageFile, mediaTypeLabel } from '../../../utils/mediaFormats';
+import { backgroundAdvice, classifyBackground, type BackgroundKind } from '../../../utils/backgroundCheck';
 import { CLAIM_BREAKS, FESTIVALS, claimStatus, upcomingFestivals, resolveAvatarSkin, type AvatarSkin, type FestivalSkin } from '../../../utils/seasons';
 
 interface SettingsProps {
@@ -12,6 +14,16 @@ interface SettingsProps {
   onClose: () => void;
   onHeaderMouseDown?: (e: React.MouseEvent) => void;
 }
+
+// What "Quiet during calls" can see differs by platform (see src/main/meetings.ts).
+const CALL_DETECTION_HELP =
+  location.protocol === 'chrome-extension:'
+    ? 'Break and water reminders wait while a tab is on a call (Meet, Zoom, Teams, any camera or mic call).'
+    : navigator.userAgent.includes('Windows')
+      ? 'Break and water reminders wait while any app is using your microphone.'
+      : navigator.userAgent.includes('Mac')
+        ? 'Break and water reminders wait while you are in a Zoom meeting.'
+        : 'Break and water reminders wait during calls (not detected on Linux yet).';
 
 // Friendly label from a library path like custom_buddy_<ts>__<original>.<ext>
 function getFilename(p: string): string {
@@ -51,16 +63,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
   }, []);
 
   useEffect(() => {
-    refreshLibrary();
-  }, [refreshLibrary]);
+    let current = true;
+    window.api.getMediaLibrary().then((lib) => { if (current) setMediaLibrary(lib); });
+    return () => { current = false; };
+  }, []);
 
-  useEffect(() => {
+  // When settings change elsewhere (another tab, the tray, the scheduler), follow them. This
+  // adjusts state while rendering, React's recommended alternative to syncing in an effect.
+  const [syncedSettings, setSyncedSettings] = useState(settings);
+  if (settings !== syncedSettings) {
+    setSyncedSettings(settings);
     setWorkDuration(settings.workDuration);
     setBreakDuration(settings.breakDuration);
     setSnoozeDuration(settings.snoozeDuration);
     setCustomVideoPath(settings.customVideoPath);
     setMediaLibrary(settings.mediaLibrary);
-  }, [settings]);
+  }
 
   useEffect(() => () => { soundPreviewRef.current?.pause(); }, []);
 
@@ -80,16 +98,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     return () => clearInterval(interval);
   }, []);
 
-  const handleGrantPermission = async () => {
+  const handleGrantPermission = async (): Promise<void> => {
     const granted = await window.api.requestPermission();
     setHasPermission(granted);
   };
 
-  const handleSave = (key: keyof AppSettings, value: any) => {
-    onSave({ [key]: value });
+  const handleSave = <K extends keyof AppSettings>(key: K, value: AppSettings[K]): void => {
+    onSave({ [key]: value } as Partial<AppSettings>);
   };
 
-  const handleSelectMedia = async () => {
+  const handleSelectMedia = async (): Promise<void> => {
     const newPath = await window.api.selectMedia();
     if (newPath) {
       setCustomVideoPath(newPath);
@@ -98,7 +116,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleSelectSkin = (skin: AvatarSkin) => {
+  const handleSelectSkin = (skin: AvatarSkin): void => {
     setCustomVideoPath(null);
     onSave({ customVideoPath: null, avatarSkin: skin });
   };
@@ -126,6 +144,30 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
   };
 
   const [shareStatus, setShareStatus] = useState('');
+
+  // Is the chosen picture really see-through? (A drawn-in checkerboard or a solid background
+  // shows as a box.) Videos get the green-screen hint instead.
+  // Keyed by file, so switching avatars never shows the previous picture's result.
+  const [checked, setChecked] = useState<{ path: string; kind: BackgroundKind } | null>(null);
+  const backgroundKind = checked && checked.path === customVideoPath ? checked.kind : null;
+  useEffect(() => {
+    if (!customVideoPath || !isImageFile(customVideoPath)) return undefined;
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = toMediaUrl(customVideoPath);
+    img.decode().then(() => {
+      const scale = Math.min(1, 512 / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = Object.assign(document.createElement('canvas'), { width: w, height: h }).getContext('2d');
+      if (!ctx || cancelled) return;
+      ctx.drawImage(img, 0, 0, w, h);
+      setChecked({ path: customVideoPath, kind: classifyBackground(ctx.getImageData(0, 0, w, h).data, w, h) });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [customVideoPath]);
+  const avatarTip = !customVideoPath ? null : isImageFile(customVideoPath) ? (backgroundKind && backgroundAdvice(backgroundKind)) : formatHint(customVideoPath);
   const handleShare = async (mode: 'download' | 'copy'): Promise<void> => {
     try {
       const blob = await drawShareCard(settings, shownSkin);
@@ -141,12 +183,12 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleSelectLibraryItem = (p: string) => {
+  const handleSelectLibraryItem = (p: string): void => {
     setCustomVideoPath(p);
     handleSave('customVideoPath', p);
   };
 
-  const handleDeleteLibraryItem = async (p: string, e: React.MouseEvent) => {
+  const handleDeleteLibraryItem = async (p: string, e: React.MouseEvent): Promise<void> => {
     e.stopPropagation();
     const newLib = await window.api.deleteMediaLibraryItem(p);
     setMediaLibrary(newLib);
@@ -156,7 +198,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleSelectSound = async () => {
+  const handleSelectSound = async (): Promise<void> => {
     const newPath = await window.api.selectSound();
     if (newPath) {
       setCustomSoundPath(newPath);
@@ -164,13 +206,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     }
   };
 
-  const handleResetSound = async () => {
+  const handleResetSound = async (): Promise<void> => {
     await window.api.resetSound();
     setCustomSoundPath(null);
     handleSave('customSoundPath', null);
   };
 
-  const handlePreviewSound = () => {
+  const handlePreviewSound = (): void => {
     if (!customSoundPath) return;
     if (isSoundPlaying && soundPreviewRef.current) {
       soundPreviewRef.current.pause();
@@ -186,18 +228,18 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     audio.onended = () => setIsSoundPlaying(false);
   };
 
-  const getSoundFilename = () => {
+  const getSoundFilename = (): string => {
     if (!customSoundPath) return 'Default Cute Chime';
     const parts = customSoundPath.split(/[/\\]/);
     return parts[parts.length - 1].replace(/^custom_sound_\d+/, '').replace(/^\.|^_/, '') || parts[parts.length - 1];
   };
 
   // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent): void => {
     e.preventDefault();
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent): Promise<void> => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file) {
@@ -517,7 +559,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   <p key={g.title}><b>{g.title}</b> <span className="format-guide-formats">{g.formats}</span><br />{g.text}</p>
                 ))}
               </div>
-              {customVideoPath && formatHint(customVideoPath) && <p className="format-hint">💡 {formatHint(customVideoPath)}</p>}
+              {avatarTip && <p className="format-hint">💡 {avatarTip}</p>}
               <div className="switch-row" style={{ marginTop: '10px' }}>
                 <div className="switch-label-group">
                   <span className="switch-label">Dress up for festivals</span>
@@ -702,6 +744,43 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                       setStartOnBoot(val);
                       handleSave('startOnBoot', val);
                     }}
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            {/* Away time and calls */}
+            <div className="switch-group" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '12px' }}>
+              {smartMonitoringEnabled && (
+                <div className="switch-row">
+                  <div className="switch-label-group">
+                    <span className="switch-label">Away After</span>
+                    <span className="switch-sublabel">No keyboard or mouse this long pauses the focus timer. Being away this long counts as a break.</span>
+                  </div>
+                  <select
+                    aria-label="Away after"
+                    className="setting-select setting-select-compact non-draggable"
+                    value={settings.awayMinutes ?? 5}
+                    onChange={(e) => handleSave('awayMinutes', Number(e.target.value))}
+                  >
+                    {AWAY_MINUTE_CHOICES.map((m) => (
+                      <option key={m} value={m}>{m} min</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="switch-row">
+                <div className="switch-label-group">
+                  <span className="switch-label">Quiet During Calls</span>
+                  <span className="switch-sublabel">{CALL_DETECTION_HELP}</span>
+                </div>
+                <label className="switch non-draggable">
+                  <input
+                    type="checkbox"
+                    aria-label="Hold reminders during calls"
+                    checked={settings.meetingAware ?? true}
+                    onChange={(e) => handleSave('meetingAware', e.target.checked)}
                   />
                   <span className="slider"></span>
                 </label>

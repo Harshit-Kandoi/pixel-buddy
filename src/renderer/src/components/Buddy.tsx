@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import buddyMascot from '../assets/buddy.svg';
 import { toMediaUrl } from '../../../utils/mediaUrl';
 import { isImageFile } from '../../../utils/mediaFormats';
+import { MOOD_BADGES, type Mood } from '../../../utils/mood';
 
 interface BuddyProps {
   state: string;
@@ -13,6 +14,10 @@ interface BuddyProps {
   onMouseDown?: (e: React.MouseEvent) => void;
   clickAnimClass?: string;
   onFileDrop?: (filePath: string) => void;
+  /** Idle: hold still instead of floating forever (saves battery). */
+  resting?: boolean;
+  /** Shown as a small badge by the buddy's head; a tired buddy also looks a little dimmer. */
+  mood?: Mood | null;
 }
 
 // ─── WebGL Shader Sources ────────────────────────────────────────────────────
@@ -153,29 +158,64 @@ export const Buddy: React.FC<BuddyProps> = ({
   onMouseDown,
   clickAnimClass = '',
   onFileDrop,
+  resting = false,
+  mood = null,
 }) => {
-  const [videoError, setVideoError] = useState(false);
+  // Remember which source failed: switching file or keying mode clears the error by itself.
+  const sourceKey = `${customVideoPath}|${keyingMode}|${debugKeyer}`;
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const videoError = failedSource === sourceKey;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const glStateRef = useRef<GLState | null>(null);
   const bgRef = useRef<[number, number, number]>([0, 0.7, 0.25]);
   const bgTickRef = useRef(0);
   const rafRef = useRef<number>(0);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [frozenSrc, setFrozenSrc] = useState<string | null>(null);
 
   const mediaSrc = customVideoPath ? toMediaUrl(customVideoPath) : defaultSrc;
   const isImage = !customVideoPath || isImageFile(customVideoPath);
 
   // Animation class goes on the wrapper div, NOT the media element
   // This prevents GIFs from rotating/distorting on click
-  let containerAnim = 'buddy-bounce';
+  let containerAnim = resting ? 'buddy-resting' : 'buddy-bounce';
   if (state === 'POPUP') containerAnim = 'buddy-walk-in';
   if (clickAnimClass) containerAnim = clickAnimClass;
+
+  // Resting: pause video avatars (the keyer only runs on new frames, so it stops too) and
+  // hold animated GIF/WebP avatars on their current frame. Waking resumes both.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      if (resting) video.pause();
+      else video.play().catch(() => {});
+    }
+    // Update the frozen frame on the next tick rather than mid-render.
+    const id = setTimeout(() => {
+      const img = imgRef.current;
+      if (!resting || !customVideoPath || !/\.(gif|apng|webp)$/i.test(customVideoPath) || !img?.complete || !img.naturalWidth) {
+        setFrozenSrc(null);
+        return;
+      }
+      try {
+        const scale = Math.min(1, 320 / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setFrozenSrc(canvas.toDataURL());
+      } catch {
+        setFrozenSrc(null); // can't read the pixels: keep it animating
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  }, [resting, customVideoPath, isImage]);
 
   // Re-init when source or keying mode changes
   useEffect(() => {
     bgTickRef.current = 0;
     glStateRef.current = null;
-    setVideoError(false); // will be re-created in next effect run
   }, [customVideoPath, keyingMode, debugKeyer]);
 
   useEffect(() => {
@@ -193,8 +233,14 @@ export const Buddy: React.FC<BuddyProps> = ({
       if (!gls) console.warn('WebGL not available — falling back to 2D canvas chroma key');
     }
 
-    const draw = () => {
-      rafRef.current = requestAnimationFrame(draw);
+    // Key a frame only when the video has a new one (24–30 a second for most clips) instead of
+    // on every screen refresh; fall back to animation frames where that API is missing.
+    const withFrames = typeof video.requestVideoFrameCallback === 'function';
+    const schedule = (): void => {
+      rafRef.current = withFrames ? video.requestVideoFrameCallback(draw) : requestAnimationFrame(draw);
+    };
+    const draw = (): void => {
+      schedule();
 
       if (!video || video.readyState < 2) return; // video not decoded yet
 
@@ -268,10 +314,11 @@ export const Buddy: React.FC<BuddyProps> = ({
     };
 
     video.play().catch((e) => console.warn('Video play interrupted:', e));
-    rafRef.current = requestAnimationFrame(draw);
+    schedule();
 
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      if (withFrames) video.cancelVideoFrameCallback(rafRef.current);
+      else cancelAnimationFrame(rafRef.current);
     };
   }, [isImage, videoError, mediaSrc, keyingMode, debugKeyer]);
 
@@ -279,7 +326,7 @@ export const Buddy: React.FC<BuddyProps> = ({
 
   const svgShadow = { filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.35))' };
 
-  const renderFallback = () => {
+  const renderFallback = (): React.JSX.Element => {
     switch (state) {
       case 'BREAK':
         return (
@@ -328,12 +375,12 @@ export const Buddy: React.FC<BuddyProps> = ({
   };
 
   const mediaCss: React.CSSProperties = {
-    filter: 'drop-shadow(0 8px 14px rgba(0,0,0,0.32))',
+    filter: `drop-shadow(0 8px 14px rgba(0,0,0,0.32))${mood === 'tired' ? ' saturate(0.7) brightness(0.94)' : ''}`,
     display: 'block',
   };
 
-  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent): void => e.preventDefault();
+  const handleDrop = (e: React.DragEvent): void => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file && onFileDrop) {
@@ -344,7 +391,7 @@ export const Buddy: React.FC<BuddyProps> = ({
 
   return (
     <div
-      className={`buddy-container ${containerAnim}`}
+      className={`buddy-container ${containerAnim}${mood ? ` mood-${mood}` : ''}`}
       onMouseDown={onMouseDown}
       // Block Chromium's native image drag — it swallows mouseup and leaves input stuck
       onDragStart={(e) => e.preventDefault()}
@@ -354,12 +401,14 @@ export const Buddy: React.FC<BuddyProps> = ({
       {!videoError ? (
         isImage ? (
           <img
-            src={mediaSrc}
+            ref={imgRef}
+            src={frozenSrc ?? mediaSrc}
+            crossOrigin={customVideoPath ? 'anonymous' : undefined}
             draggable={false}
             className="buddy-media"
             style={mediaCss}
             alt="Buddy Companion"
-            onError={() => { console.warn('Image load failed, falling back.'); setVideoError(true); }}
+            onError={() => { console.warn('Image load failed, falling back.'); setFailedSource(sourceKey); }}
           />
         ) : (
           <>
@@ -371,13 +420,18 @@ export const Buddy: React.FC<BuddyProps> = ({
               muted
               playsInline
               crossOrigin="anonymous"
-              onError={() => { console.warn('Video load failed, falling back.'); setVideoError(true); }}
+              onError={() => { console.warn('Video load failed, falling back.'); setFailedSource(sourceKey); }}
             />
             <canvas ref={canvasRef} className="buddy-media" style={mediaCss} />
           </>
         )
       ) : (
         renderFallback()
+      )}
+      {mood && (
+        <span key={mood} className={`buddy-mood buddy-mood-${mood}`} role="img" aria-label={MOOD_BADGES[mood].label} title={MOOD_BADGES[mood].label}>
+          {MOOD_BADGES[mood].emoji}
+        </span>
       )}
     </div>
   );

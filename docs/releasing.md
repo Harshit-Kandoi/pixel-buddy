@@ -100,7 +100,7 @@ The website shows available files from the API. Missing builds get a clear statu
 
 In the repository's **Settings → Pages**, choose **GitHub Actions** as the publishing source. Run `Publish download website`, or push a website change to `main`. The workflow deploys only `website/dist/`.
 
-The default project Pages address is `https://harshit-kandoi.github.io/pixel-buddy/`, unless the repository's Pages configuration uses a custom domain. Treat the workflow's successful deployment URL as the verified address.
+The public website is hosted on Netlify at `https://pixelbuddy.harshitkandoi.in/` (also `https://pixelbuddyweb.netlify.app/`). `netlify.toml` publishes `website/dist/`. The GitHub Pages copy (`https://harshit-kandoi.github.io/pixel-buddy/`) is a backup; links, the extension's uninstall survey and search engines use the custom domain, and the survey only works on Netlify (it uses Netlify Forms).
 
 The site also has an owner-private Sites project reserved in `website/.openai/hosting.json`. Its initial source upload was not approved, and it has not been deployed. That reserved address is not a public giveaway link. GitHub Pages is the included public hosting route.
 

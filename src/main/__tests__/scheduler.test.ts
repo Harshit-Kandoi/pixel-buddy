@@ -1,13 +1,18 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { Scheduler } from '../scheduler';
+import type { SettingsManager } from '../settings';
+import type { ActivityMonitor } from '../activity';
+
+type MockSettings = SettingsManager & { save: Mock; getSettings: Mock };
+type MockActivity = ActivityMonitor & { start: Mock; stop: Mock; tick: Mock; getContinuousIdleSeconds: Mock; resetMinuteScore: Mock; markActive: Mock };
 import { APP_STATES, DEFAULT_SETTINGS } from '../../utils/constants';
 
 describe('Scheduler', () => {
-  let mockSettingsManager: any;
-  let mockActivityMonitor: any;
-  let onBreakDetectedCb: any;
-  let onIdleDetectedCb: any;
-  let onActiveResumedCb: any;
+  let mockSettingsManager: MockSettings;
+  let mockActivityMonitor: MockActivity;
+  let onBreakDetectedCb: () => void;
+  let onIdleDetectedCb: () => void;
+  let onActiveResumedCb: () => void;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -24,7 +29,7 @@ describe('Scheduler', () => {
         snoozeDuration: 1, // 1 minute = 60s
         skipDuration: 1, // 1 minute = 60s
       }),
-    };
+    } as unknown as MockSettings;
 
     mockActivityMonitor = {
       start: vi.fn().mockImplementation((onBreak, onIdle, onResume) => {
@@ -36,7 +41,8 @@ describe('Scheduler', () => {
       tick: vi.fn().mockReturnValue({ isActiveThisSecond: false }),
       getContinuousIdleSeconds: vi.fn().mockReturnValue(0),
       resetMinuteScore: vi.fn(),
-    };
+      markActive: vi.fn(),
+    } as unknown as MockActivity;
   });
 
   afterEach(() => {
@@ -275,6 +281,86 @@ describe('Scheduler', () => {
     vi.advanceTimersByTime(3000);
     expect(mockActivityMonitor.tick).toHaveBeenCalledTimes(3);
     scheduler.stop();
+  });
+
+
+  test('uses the away time from settings', () => {
+    mockSettingsManager.save({ awayMinutes: 2 });
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    vi.advanceTimersByTime(1000);
+    expect(mockActivityMonitor.tick).toHaveBeenLastCalledWith(true, true, 120);
+    // Past the away time, focus time stops counting.
+    mockActivityMonitor.getContinuousIdleSeconds.mockReturnValue(130);
+    const before = scheduler.getStateMachine().getData().activeWorkSeconds;
+    vi.advanceTimersByTime(3000);
+    expect(scheduler.getStateMachine().getData().activeWorkSeconds).toBe(before);
+    scheduler.stop();
+  });
+
+  describe('during a call', () => {
+    test('holds the break reminder until the call ends, and keeps counting focus time', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.start(vi.fn());
+      scheduler.setInMeeting(true);
+      vi.advanceTimersByTime(90000); // work duration is 1 minute
+      expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'WORKING', inMeeting: true, activeWorkSeconds: 90 });
+      scheduler.setInMeeting(false);
+      vi.advanceTimersByTime(1000);
+      expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'POPUP', inMeeting: false });
+      scheduler.stop();
+    });
+
+    test('holds snooze and water reminders too', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.start(vi.fn());
+      scheduler.getStateMachine().setHydrationSeconds(5);
+      scheduler.handleSnooze(); // 1 minute
+      scheduler.setInMeeting(true);
+      vi.advanceTimersByTime(120000);
+      expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'SNOOZE', snoozeSecondsLeft: 1, hydrationReminderActive: false });
+      scheduler.setInMeeting(false);
+      vi.advanceTimersByTime(1000);
+      expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'POPUP', hydrationReminderActive: true });
+      scheduler.stop();
+    });
+
+    test('sitting still on a call is not being away, and is not a break', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.start(vi.fn());
+      scheduler.getStateMachine().setWorkSeconds(30);
+      scheduler.setInMeeting(true);
+      onIdleDetectedCb();
+      onBreakDetectedCb();
+      expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'WORKING', activeWorkSeconds: 30 });
+      mockActivityMonitor.getContinuousIdleSeconds.mockReturnValue(1000);
+      vi.advanceTimersByTime(5000);
+      expect(scheduler.getStateMachine().getData().activeWorkSeconds).toBe(35);
+      // Away time counts from the start and end of the call.
+      expect(mockActivityMonitor.markActive).toHaveBeenCalledTimes(1);
+      scheduler.setInMeeting(false);
+      expect(mockActivityMonitor.markActive).toHaveBeenCalledTimes(2);
+      scheduler.stop();
+    });
+
+    test('joining a call while away counts as being back', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.start(vi.fn());
+      onIdleDetectedCb();
+      expect(scheduler.getStateMachine().getState()).toBe('IDLE');
+      scheduler.setInMeeting(true);
+      expect(scheduler.getStateMachine().getState()).toBe('WORKING');
+      scheduler.stop();
+    });
+
+    test('turning call detection off releases held reminders', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.setInMeeting(true);
+      const previous = mockSettingsManager.getSettings();
+      mockSettingsManager.save({ meetingAware: false });
+      scheduler.handleSettingsChanged(previous);
+      expect(scheduler.getStateMachine().getData().inMeeting).toBe(false);
+    });
   });
 
 });

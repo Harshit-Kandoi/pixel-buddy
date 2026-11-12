@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, screen, protocol, dialog, net } from 'electron';
+import { app, shell, BrowserWindow, ipcMain, screen, protocol, dialog, net, powerMonitor } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
@@ -14,14 +14,17 @@ if (fs.existsSync(path.join(legacyUserData, 'settings.json'))) {
 // Suppress harmless Windows GPU shader cache permission errors in console
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 
-// Register 'buddy-media' as standard, secure, and support fetch
+// Register 'buddy-media' as standard and secure. Videos need `stream` (they load in ranges)
+// and `corsEnabled`: the buddy's <video> is crossOrigin so the green-screen keyer may read
+// its pixels, which only works when the response carries CORS headers.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'buddy-media', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+  { scheme: 'buddy-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }
 ]);
 import { SettingsManager } from './settings';
 import type { BuddyAnchor } from '../utils/types';
 import { ActivityMonitor } from './activity';
 import { Scheduler } from './scheduler';
+import { detectMeeting, MEETING_POLL_MS } from './meetings';
 import { TrayManager } from './tray';
 import { MEDIA_EXTENSIONS, isMediaFile } from '../utils/mediaFormats';
 
@@ -72,21 +75,43 @@ function getBottomRightPosition(width: number, height: number): { x: number; y: 
   return { x, y };
 }
 
+type Rect = { x: number; y: number; width: number; height: number };
+
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+
+/** Where a window with these bounds sits fully inside the work area of the screen it's mostly on (or nearest to). */
+function fitOnScreen(bounds: Rect): { x: number; y: number } {
+  const area = screen.getDisplayMatching(bounds).workArea;
+  return {
+    x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - bounds.width)),
+    y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - bounds.height)),
+  };
+}
+
+// A monitor was unplugged, rearranged, rescaled, or the taskbar/dock moved: bring the buddy
+// back onto a screen if it ended up (partly) off one, and remember the new spot.
+function keepOnScreen(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = mainWindow.getBounds();
+  const { x, y } = fitOnScreen(bounds);
+  if (x === bounds.x && y === bounds.y) return;
+  mainWindow.setPosition(x, y);
+  settingsManager.save({ windowX: x, windowY: y });
+}
+
 function createWindow(): void {
   const settings = settingsManager.getSettings();
   let x = settings.windowX;
   let y = settings.windowY;
 
   if (x !== null && y !== null && x !== undefined && y !== undefined) {
-    // Check if the coordinates are visible on any of the connected displays
-    const savedX = x;
-    const savedY = y;
-    const displays = screen.getAllDisplays();
-    const isVisible = displays.some((display) => {
-      const { x: dx, y: dy, width: dw, height: dh } = display.bounds;
-      return savedX >= dx && savedX < dx + dw && savedY >= dy && savedY < dy + dh;
-    });
-    if (!isVisible) {
+    // The saved spot may be on a monitor that's gone, or partly off a screen that changed size:
+    // keep it only if it still overlaps a screen, and pull it fully onto that screen.
+    const saved = { x, y, width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+    if (screen.getAllDisplays().some((display) => overlaps(saved, display.workArea))) {
+      ({ x, y } = fitOnScreen(saved));
+    } else {
       x = null;
       y = null;
     }
@@ -119,7 +144,7 @@ function createWindow(): void {
 
   // macOS floating panel — keeps above full-screen apps
   if (process.platform === 'darwin') {
-    (winOptions as any).type = 'panel';
+    winOptions.type = 'panel';
   }
 
   mainWindow = new BrowserWindow(winOptions);
@@ -161,7 +186,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   // Register media protocol to load local files
-  protocol.handle('buddy-media', (request) => {
+  protocol.handle('buddy-media', async (request) => {
     try {
       // URLs look like buddy-media://local/<encodeURIComponent(absolutePath)>
       const filePath = path.resolve(decodeURIComponent(new URL(request.url).pathname.slice(1)));
@@ -170,7 +195,11 @@ app.whenReady().then(() => {
       if (!allowed.some((dir) => filePath.startsWith(dir + path.sep)) || !fs.existsSync(filePath)) {
         return new Response('Not found', { status: 404 });
       }
-      return net.fetch(pathToFileURL(filePath).toString());
+      // Forward Range so videos can seek and stream, and allow the app's page to read the pixels.
+      const response = await net.fetch(pathToFileURL(filePath).toString(), { headers: request.headers });
+      const headers = new Headers(response.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     } catch (err) {
       console.error('Failed to resolve buddy-media URL:', err);
       return new Response('Not found', { status: 404 });
@@ -229,6 +258,24 @@ app.whenReady().then(() => {
       mainWindow.webContents.send('scheduler:tick', stateData);
     }
   });
+
+  // Calls and meetings: reminders wait while one is on (see meetings.ts for what's detected).
+  // Not checked while paused or on a break, when no reminder could appear anyway.
+  let meetingCheckBusy = false;
+  const checkMeeting = async (): Promise<void> => {
+    const settings = settingsManager.getSettings();
+    const { state, isPaused } = scheduler.getStateMachine().getData();
+    if (!settings.meetingAware) return scheduler.setInMeeting(false);
+    if (meetingCheckBusy || isPaused || state === 'BREAK') return;
+    meetingCheckBusy = true;
+    try {
+      scheduler.setInMeeting(await detectMeeting());
+    } finally {
+      meetingCheckBusy = false;
+    }
+  };
+  setInterval(() => void checkMeeting(), MEETING_POLL_MS);
+  void checkMeeting();
 
   // ---------------------------------
   // IPC Request/Response Setup
@@ -402,6 +449,25 @@ app.whenReady().then(() => {
     }
   });
 
+  // Multi-monitor: displays can disappear or change while the app runs (laptop lid, dock).
+  // Wait a moment: the OS reports several changes in a row while it settles.
+  let screenSettle: ReturnType<typeof setTimeout> | undefined;
+  const onScreensChanged = (): void => {
+    clearTimeout(screenSettle);
+    screenSettle = setTimeout(keepOnScreen, 500);
+  };
+  screen.on('display-removed', onScreensChanged);
+  screen.on('display-added', onScreensChanged);
+  screen.on('display-metrics-changed', onScreensChanged);
+
+  // Battery: the buddy suggests a lighter avatar than a video while on battery power.
+  ipcMain.handle('power:on-battery', () => powerMonitor.isOnBatteryPower());
+  const sendPower = (onBattery: boolean): void => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('power:changed', onBattery);
+  };
+  powerMonitor.on('on-battery', () => sendPower(true));
+  powerMonitor.on('on-ac', () => sendPower(false));
+
   // Use the normal quit lifecycle so will-quit stops native hooks and timers.
   ipcMain.on('app:quit', () => {
     app.quit();
@@ -558,22 +624,31 @@ app.whenReady().then(() => {
     hitRects = Array.isArray(rects) ? rects : [];
   });
 
-  setInterval(() => {
-    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
-    if (dragStart !== null) return; // don't interrupt active dragging
+  // Click-through: take the pointer only over the buddy's visible UI. Check often when the
+  // cursor is near the window, rarely when it's far away (saves battery while you work).
+  const NEAR_PX = 150;
+  const pollClickThrough = (): void => {
+    let next = 50;
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && dragStart === null) {
+      const cursor = screen.getCursorScreenPoint();
+      const bounds = mainWindow.getBounds();
+      const rx = cursor.x - bounds.x;
+      const ry = cursor.y - bounds.y;
 
-    const cursor = screen.getCursorScreenPoint();
-    const bounds = mainWindow.getBounds();
-    const rx = cursor.x - bounds.x;
-    const ry = cursor.y - bounds.y;
+      const overUi = isSettingsVisible || hitRects.some((r) =>
+        rx >= r.x && rx <= r.x + r.width && ry >= r.y && ry <= r.y + r.height
+      );
 
-    const overUi = isSettingsVisible || hitRects.some((r) =>
-      rx >= r.x && rx <= r.x + r.width && ry >= r.y && ry <= r.y + r.height
-    );
-
-    // forward: true lets the renderer still receive mouse-move events while click-through
-    safeSetIgnoreMouseEvents(mainWindow, !overUi, true);
-  }, 50);
+      // forward: true lets the renderer still receive mouse-move events while click-through
+      safeSetIgnoreMouseEvents(mainWindow, !overUi, true);
+      const near = rx > -NEAR_PX && ry > -NEAR_PX && rx < bounds.width + NEAR_PX && ry < bounds.height + NEAR_PX;
+      if (!near && !isSettingsVisible) next = 200;
+    } else if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+      next = 500; // hidden: nothing to hit-test
+    }
+    setTimeout(pollClickThrough, next);
+  };
+  pollClickThrough();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

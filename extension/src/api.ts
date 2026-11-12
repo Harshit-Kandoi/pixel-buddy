@@ -12,6 +12,9 @@ export interface Host {
   quit(): void;
 }
 
+// For host methods this environment doesn't need.
+const noop = (): void => undefined;
+
 const DESKTOP_ONLY = 'Custom buddies and sounds need the desktop app. The extension uses the built-in buddy and chime.';
 
 export function showNotice(text: string): void {
@@ -34,12 +37,12 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
   const settingsUpdates = new Set<(settings: AppSettings) => void>();
   const showSettings = new Set<() => void>();
   const subscribe = <T>(listeners: Set<T>, callback: T) => { listeners.add(callback); return () => { listeners.delete(callback); }; };
-  const act = (action: SchedulerAction) => { void call({ type: 'action', action }); };
-  const desktopOnly = () => { showNotice(DESKTOP_ONLY); };
+  const act = (action: SchedulerAction): void => { void call({ type: 'action', action }); };
+  const desktopOnly = (): void => { showNotice(DESKTOP_ONLY); };
 
   let port: chrome.runtime.Port | null = null;
-  const wanted = () => !onlyWhileVisible || document.visibilityState === 'visible';
-  const connect = () => {
+  const wanted = (): boolean => !onlyWhileVisible || document.visibilityState === 'visible';
+  const connect = (): void => {
     if (port || !wanted() || !chrome.runtime?.id) return;
     try {
       port = chrome.runtime.connect({ name: portName });
@@ -66,7 +69,7 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
 
   // Report input so smart monitoring can end a break early when you come back.
   let lastPing = 0;
-  const ping = () => {
+  const ping = (): void => {
     if (Date.now() - lastPing < 1000 || !chrome.runtime?.id) return;
     lastPing = Date.now();
     void call({ type: 'input' }).catch(() => {});
@@ -88,7 +91,7 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     onTick: callback => subscribe(ticks, callback),
     getPermissionStatus: async () => true,
     requestPermission: async () => true,
-    setIgnoreMouseEvents() {},
+    setIgnoreMouseEvents: noop,
     resize: (width, height) => host.resize(width, height),
     onShowSettings: callback => subscribe(showSettings, callback),
     setSettingsVisible: visible => host.setSettingsVisible(visible),
@@ -97,7 +100,7 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     snoozeHydration: () => act('snoozeHydration'),
     dismissHydration: () => act('dismissHydration'),
     dragStart: () => host.dragStart(),
-    dragMove() {},
+    dragMove: noop,
     dragEnd: anchor => host.dragEnd(anchor),
     selectMedia: async () => { desktopOnly(); return null; },
     getPathForFile: () => { desktopOnly(); return ''; },
@@ -108,6 +111,9 @@ export function installApi(portName: string, host: Host, { onlyWhileVisible = fa
     selectSound: async () => { desktopOnly(); return null; },
     resetSound: async () => null,
     quit: () => host.quit(),
+    // Video avatars are desktop-only, so the battery hint never applies in the browser.
+    isOnBattery: async () => false,
+    onPowerChange: () => () => {},
     showWindow: () => host.setVisible(true),
     hideWindow: () => host.setVisible(false),
   };

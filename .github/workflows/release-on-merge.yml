@@ -32,8 +32,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   version:
-    # Standard hosted runners are free for public repositories. Avoid private-repo charges.
-    if: github.event.repository.private == false && !contains(github.event.head_commit.message, '[skip release]')
+    # Only the original repository releases (forks copy this workflow; a fork's main must not
+    # tag and publish releases). Standard runners are free for public repositories only.
+    if: github.repository == 'Harshit-Kandoi/pixel-buddy' && github.event.repository.private == false && !contains(github.event.head_commit.message, '[skip release]')
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
@@ -52,8 +53,11 @@ jobs:
           cache: npm
       # Unit tests only need the JavaScript dependencies, not Electron's native rebuild.
       - run: npm ci --ignore-scripts
+      - run: npm run lint
       - run: npm test
       - run: npm run typecheck
+      - name: Festival dates (warns, never fails)
+        run: node scripts/check-festival-dates.mjs
       - name: Pick the version
         id: next
         run: node scripts/next-version.mjs --notes --bump "${{ inputs.bump || 'auto' }}"

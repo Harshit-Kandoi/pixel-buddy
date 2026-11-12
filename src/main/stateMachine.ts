@@ -14,6 +14,7 @@ export class StateMachine {
   private isPaused = false;
   private hydrationSecondsLeft = 0;
   private hydrationReminderActive = false;
+  private inMeeting = false;
 
   private onStateChangeCallback: ((data: StateMachineData) => void) | null = null;
 
@@ -32,6 +33,7 @@ export class StateMachine {
       isPaused: this.isPaused,
       hydrationSecondsLeft: this.hydrationSecondsLeft,
       hydrationReminderActive: this.hydrationReminderActive,
+      inMeeting: this.inMeeting,
     };
   }
 
@@ -47,6 +49,12 @@ export class StateMachine {
 
   public setHydrationReminderActive(active: boolean): void {
     this.hydrationReminderActive = active;
+    this.emitChange();
+  }
+
+  public setInMeeting(active: boolean): void {
+    if (this.inMeeting === active) return;
+    this.inMeeting = active;
     this.emitChange();
   }
 

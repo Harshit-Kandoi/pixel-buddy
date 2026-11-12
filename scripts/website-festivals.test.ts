@@ -25,8 +25,8 @@ describe('website festival calendar', () => {
     ]);
   });
 
-  it('picks the same festival as the app on every day of 2027 and 2028', () => {
-    for (let d = new Date(2027, 0, 1, 12); d.getFullYear() < 2029; d.setDate(d.getDate() + 1)) {
+  it('picks the same festival as the app on every day through 2030', () => {
+    for (let d = new Date(2027, 0, 1, 12); d.getFullYear() < 2031; d.setDate(d.getDate() + 1)) {
       expect(activeFestival(d)?.festival.skin ?? null, d.toDateString()).toBe(appActiveFestival(d)?.festival.skin ?? null);
     }
   });

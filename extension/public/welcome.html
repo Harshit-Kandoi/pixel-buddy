@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome to Pixel Buddy</title>
+<link rel="icon" href="icons/icon-32.png">
+<style>
+:root { color-scheme: light dark; --bg: #f6f8f5; --card: #fff; --ink: #1e293b; --muted: #64748b; --accent: #22a06b; --line: rgba(15, 23, 42, .1); }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f172a; --card: #1e293b; --ink: #e2e8f0; --muted: #94a3b8; --line: rgba(255, 255, 255, .1); } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 48px 20px 64px; }
+header { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
+header img { width: 64px; height: 64px; }
+h1 { font-size: 32px; line-height: 1.15; margin: 0; letter-spacing: -.5px; }
+.lead { color: var(--muted); margin: 4px 0 28px; }
+ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; counter-reset: step; }
+li { counter-increment: step; position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 16px 60px; }
+li::before { content: counter(step); position: absolute; left: 18px; top: 16px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 700; font-size: 14px; }
+li strong { display: block; margin-bottom: 2px; }
+li span { color: var(--muted); }
+kbd { font: inherit; font-size: 13px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
+.note { margin-top: 24px; padding: 14px 18px; border-radius: 14px; border: 1px dashed var(--line); color: var(--muted); font-size: 14px; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<header>
+<img src="icons/icon-128.png" alt="">
+<div>
+<h1>Your buddy is here! 👋</h1>
+</div>
+</header>
+<p class="lead">Pixel Buddy keeps you company in your tabs and reminds you to take breaks, drink water and rest your eyes. Here's how it works in under a minute.</p>
+<ol>
+<li><strong>Open any website</strong><span>The buddy sits in the bottom-right corner of your tabs. It can't appear on browser pages like this one, the new tab page or the Chrome Web Store.</span></li>
+<li><strong>Pin it to your toolbar</strong><span>Click the puzzle piece <kbd>🧩</kbd> next to the address bar, then the pin. The icon shows minutes until your next break, and its menu lets you log a glass of water or hide the buddy.</span></li>
+<li><strong>Click the buddy</strong><span>It says something nice. The <kbd>⚙</kbd> next to it opens settings: timer lengths, your name, water goal and avatar. Drag the buddy anywhere you like.</span></li>
+<li><strong>Take the break when it asks</strong><span>Every 55 minutes (you can change it) the buddy suggests a short break and leads a quick stretch, eye or breathing routine. Snooze or skip if you're busy.</span></li>
+<li><strong>It notices when you're away or on a call</strong><span>Stepping away for 5 minutes counts as a break, and reminders wait while a tab is on a Meet, Zoom or Teams call. Both are in settings.</span></li>
+</ol>
+<p class="note">🎁 During festivals the buddy dresses up. Take 3 breaks during a festival to keep that buddy for good.<br>🔒 Everything stays in your browser: no account, no tracking. <a href="https://pixelbuddy.harshitkandoi.in/privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
+</main>
+</body>
+</html>

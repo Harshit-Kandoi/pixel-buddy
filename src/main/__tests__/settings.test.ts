@@ -5,6 +5,8 @@ import { SettingsManager } from '../settings';
 import { DEFAULT_SETTINGS } from '../../utils/constants';
 
 const { TEST_DIR } = vi.hoisted(() => {
+  // vi.hoisted runs before the imports above exist, so this one has to be a require.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const path = require('path');
   return {
     TEST_DIR: path.join(__dirname, 'temp_test_userdata'),

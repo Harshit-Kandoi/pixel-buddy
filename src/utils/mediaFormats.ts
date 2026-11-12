@@ -40,7 +40,7 @@ export function formatHint(filePath: string): string | null {
     return `${ext.toUpperCase()} photos keep their background, so you'll see it as a box. For a cut-out buddy, use a transparent PNG, GIF or WebP.`;
   }
   if (VIDEO_EXTENSIONS.includes(ext)) {
-    return 'The solid background colour (like a green screen) is removed. If edges look off, try another option under Keying / Transparency.';
+    return 'The solid background colour (like a green screen) is removed. If edges look off, try another option under Keying / Transparency. Videos use the most battery; a picture or GIF is lighter on long days unplugged.';
   }
   return null;
 }

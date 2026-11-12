@@ -43,6 +43,7 @@ export class TrayManager {
       isPaused: false,
       hydrationSecondsLeft: 0,
       hydrationReminderActive: false,
+      inMeeting: false,
     });
   }
 
@@ -61,6 +62,10 @@ export class TrayManager {
             statusText = 'Snoozed (Skip Cooldown)';
             const mins = Math.ceil(data.skipSecondsLeft / 60);
             timeText = `${mins}m left`;
+          } else if (data.inMeeting) {
+            statusText = 'On a call (reminders wait)';
+            const mins = Math.floor(data.activeWorkSeconds / 60);
+            timeText = `${mins}m active`;
           } else {
             statusText = 'Working';
             const mins = Math.floor(data.activeWorkSeconds / 60);

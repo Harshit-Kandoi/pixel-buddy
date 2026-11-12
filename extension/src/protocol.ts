@@ -7,7 +7,8 @@ export type Call =
   | { type: 'saveSettings'; patch: Partial<AppSettings> }
   | { type: 'getState' }
   | { type: 'action'; action: SchedulerAction }
-  | { type: 'input' };
+  | { type: 'input' }
+  | { type: 'meeting'; active: boolean };
 
 export type SchedulerAction = 'takeBreak' | 'buddyInteraction' | 'snooze' | 'skip' | 'reset' | 'togglePause' | 'logHydration' | 'snoozeHydration' | 'dismissHydration';
 

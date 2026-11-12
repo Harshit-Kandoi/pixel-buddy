@@ -12,7 +12,7 @@ let visible = false;
 let interactive = false;
 let hitRects: Rect[] = [];
 
-const clamp = (value: number, max: number) => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
+const clamp = (value: number, max: number): number => Math.round(Math.min(Math.max(0, value), Math.max(0, max)));
 
 function render(): void {
   if (!frame) return;
@@ -101,12 +101,41 @@ const orphanCheck = setInterval(() => {
 
 // Page input counts toward smart monitoring, like the desktop app's global input hook.
 let lastPing = 0;
-const ping = () => {
+const ping = (): void => {
   if (Date.now() - lastPing < 1000 || !chrome.runtime?.id) return;
   lastPing = Date.now();
   chrome.runtime.sendMessage({ type: 'input' }).catch(() => {});
 };
 for (const type of ['keydown', 'mousedown', 'mousemove', 'wheel', 'touchstart']) window.addEventListener(type, ping, { capture: true, passive: true });
+
+// Calls: while this tab is on one, the buddy holds break and water reminders. A call is a page
+// playing a live camera or microphone stream (any site: Meet, Teams, Zoom, Slack, Discord…),
+// or a Google Meet or Zoom meeting page. Checked every few seconds; the worker forgets a tab
+// that stops reporting.
+const MEETING_CHECK_MS = 15000;
+const MEETING_REPEAT_MS = 30000;
+const isLiveStream = (media: HTMLMediaElement): boolean =>
+  Object.prototype.toString.call(media.srcObject) === '[object MediaStream]' && !media.paused;
+function onCall(): boolean {
+  const { hostname, pathname } = location;
+  if (hostname === 'meet.google.com' && /^\/[a-z]{3}-[a-z]{4}-[a-z]{3}(\/|$)/.test(pathname)) return true;
+  if (/(^|\.)zoom\.us$/.test(hostname) && /^\/wc\//.test(pathname)) return true;
+  return Array.from(document.querySelectorAll<HTMLMediaElement>('video, audio')).some(isLiveStream);
+}
+let reportedCall = false;
+let lastCallReport = 0;
+function reportCall(active: boolean): void {
+  if (!chrome.runtime?.id) return;
+  if (active === reportedCall && (!active || Date.now() - lastCallReport < MEETING_REPEAT_MS)) return;
+  reportedCall = active;
+  lastCallReport = Date.now();
+  chrome.runtime.sendMessage({ type: 'meeting', active }).catch(() => {});
+}
+const callCheck = setInterval(() => {
+  if (!chrome.runtime?.id) { clearInterval(callCheck); return; }
+  reportCall(onCall());
+}, MEETING_CHECK_MS);
+window.addEventListener('pagehide', () => { if (reportedCall) reportCall(false); });
 
 if (document.documentElement instanceof HTMLElement) {
   void chrome.storage.local.get(KEY_PAGES_ENABLED).then(stored => {

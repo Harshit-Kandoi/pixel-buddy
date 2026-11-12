@@ -64,7 +64,7 @@ export const FESTIVALS: Festival[] = [
     name: 'Lunar New Year',
     emoji: '🧧',
     wish: 'Happy Lunar New Year! 🧧',
-    dates: ['2027-02-06', '2028-01-26'],
+    dates: ['2027-02-06', '2028-01-26', '2029-02-13', '2030-02-03'],
     before: 1,
     after: 3,
     card: { paper: '#fdf1ee', dots: '#f4a6a066', line: '#f2cfc7', accent: '#b5121b' },
@@ -74,7 +74,8 @@ export const FESTIVALS: Festival[] = [
     name: 'Eid',
     emoji: '🌙',
     wish: 'Eid Mubarak! 🌙',
-    dates: ['2027-03-10', '2027-05-17', '2028-02-27'], // Eid al-Fitr and Eid al-Adha, by moon sighting
+    // Eid al-Fitr and Eid al-Adha each year, by moon sighting
+    dates: ['2027-03-10', '2027-05-17', '2028-02-27', '2028-05-05', '2029-02-14', '2029-04-24', '2030-02-04', '2030-04-13'],
     before: 1,
     after: 2,
     card: { paper: '#eefaf6', dots: '#8fd8c766', line: '#c6ebe1', accent: '#11685b' },
@@ -84,7 +85,7 @@ export const FESTIVALS: Festival[] = [
     name: 'Holi',
     emoji: '🎨',
     wish: 'Happy Holi! 🎨',
-    dates: ['2027-03-22', '2028-03-11'], // Rangwali Holi
+    dates: ['2027-03-22', '2028-03-11', '2029-03-01', '2030-03-20'], // Rangwali Holi (Dhulandi)
     before: 1,
     after: 1,
     card: { paper: '#fff6fb', dots: '#ff9fcf55', line: '#f7d3e6', accent: '#d6337a' },
@@ -94,7 +95,7 @@ export const FESTIVALS: Festival[] = [
     name: 'Onam',
     emoji: '🌼',
     wish: 'Happy Onam! 🌼',
-    dates: ['2027-09-12', '2028-09-01'], // Thiruvonam
+    dates: ['2027-09-12', '2028-09-01', '2029-08-22', '2030-09-09'], // Thiruvonam
     before: 2,
     after: 1,
     card: { paper: '#fffaf0', dots: '#f0cf7a66', line: '#efdcae', accent: '#b5121b' },
@@ -114,7 +115,7 @@ export const FESTIVALS: Festival[] = [
     name: 'Diwali',
     emoji: '🪔',
     wish: 'Shubh Deepavali! ✨',
-    dates: ['2026-11-08', '2027-10-29', '2028-10-17'], // Lakshmi Puja; the window covers Dhanteras to Bhai Dooj
+    dates: ['2026-11-08', '2027-10-29', '2028-10-17', '2029-11-05', '2030-10-26'], // Lakshmi Puja; the window covers Dhanteras to Bhai Dooj
     before: 3,
     after: 3,
     card: { paper: '#fff7df', dots: '#f5c94e66', line: '#f1d58c', accent: '#b45309' },

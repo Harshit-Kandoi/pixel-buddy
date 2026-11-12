@@ -1,14 +1,16 @@
 import { Scheduler } from '../../src/main/scheduler';
 import type { SettingsManager } from '../../src/main/settings';
 import type { ActivityMonitor } from '../../src/main/activity';
-import { APP_STATES, DEFAULT_SETTINGS } from '../../src/utils/constants';
+import { APP_STATES, DEFAULT_SETTINGS, awaySecondsFor } from '../../src/utils/constants';
+import { WEBSITE_URL } from '../../src/utils/links';
 import type { AppSettings, StateMachineData } from '../../src/utils/types';
 import { KEY_SETTINGS, PORT_PAGE, PORT_POPUP, type Call, type Push, type SchedulerAction } from './protocol';
 
 // The service worker owns the one scheduler every tab shares. It reuses the desktop timer
 // logic and swaps Electron's file settings and global input hooks for Chrome APIs.
 
-const IDLE_SECONDS = 300;
+// Seconds without input before you count as away (a setting; chrome.idle allows 15 or more).
+const awaySeconds = (): number => awaySecondsFor(settings.awayMinutes);
 const KEY_MACHINE = 'machine'; // chrome.storage.session: survives worker restarts, not browser restarts
 const NOTIFY_BREAK = 'break';
 const NOTIFY_WATER = 'water';
@@ -58,6 +60,8 @@ const activity = {
   },
   stop() { onBreakDetected = onIdleDetected = onActiveResumed = null; },
   resetMinuteScore() { lastInputAt = 0; },
+  // A call started or ended: time away counts from now.
+  markActive() { if (idleSince !== null) idleSince = Date.now(); },
   getContinuousIdleSeconds: () =>
     settings.smartMonitoringEnabled && idleSince !== null ? Math.floor((Date.now() - idleSince) / 1000) : 0,
   // "Active this second" only ends a break early, so it uses input seen in a browser tab.
@@ -73,11 +77,11 @@ function handleIdleState(state: `${chrome.idle.IdleState}`): void {
     if (idleSince === null) return;
     const awaySeconds = (Date.now() - idleSince) / 1000;
     idleSince = null;
-    if (awaySeconds >= IDLE_SECONDS && wasWorking) onBreakDetected?.();
+    if (awaySeconds >= awaySecondsFor(settings.awayMinutes) && wasWorking) onBreakDetected?.();
     onActiveResumed?.();
   } else if (idleSince === null) {
-    // 'idle' fires after IDLE_SECONDS without input; 'locked' fires the moment the screen locks.
-    idleSince = state === 'locked' ? Date.now() : Date.now() - IDLE_SECONDS * 1000;
+    // 'idle' fires after the away time without input; 'locked' fires the moment the screen locks.
+    idleSince = state === 'locked' ? Date.now() : Date.now() - awaySeconds() * 1000;
     onIdleDetected?.();
   }
 }
@@ -87,7 +91,7 @@ function handleIdleState(state: `${chrome.idle.IdleState}`): void {
 let restoring = true; // swallow side effects while start-up rebuilds the saved state
 let lastState: StateMachineData | null = null;
 const scheduler = new Scheduler(manager, activity, handleChange);
-const machine = () => scheduler.getStateMachine();
+const machine = (): ReturnType<Scheduler['getStateMachine']> => scheduler.getStateMachine();
 
 let pendingUpdate: StateMachineData | null = null;
 function handleChange(data: StateMachineData): void {
@@ -110,6 +114,7 @@ function handleChange(data: StateMachineData): void {
 }
 
 function handleTick(data: StateMachineData): void {
+  expireMeetings();
   broadcast({ type: 'tick', data });
   // Writing every second also keeps the worker alive (extension API calls reset its idle timer).
   persist(data);
@@ -139,14 +144,14 @@ const ready = (async () => {
   const [stored, session, idleState] = await Promise.all([
     chrome.storage.local.get(KEY_SETTINGS),
     chrome.storage.session.get(KEY_MACHINE),
-    chrome.idle.queryState(IDLE_SECONDS),
+    chrome.storage.local.get(KEY_SETTINGS).then(stored => chrome.idle.queryState(awaySecondsFor(stored[KEY_SETTINGS]?.awayMinutes))),
   ]);
   // Custom media and sounds live on disk in the desktop app; the extension uses the defaults.
   settings = { ...DEFAULT_SETTINGS, ...stored[KEY_SETTINGS], mediaLibrary: [], customVideoPath: null, customSoundPath: null };
-  chrome.idle.setDetectionInterval(IDLE_SECONDS);
+  chrome.idle.setDetectionInterval(awaySeconds());
   scheduler.start(handleTick);
   restore(session[KEY_MACHINE]);
-  if (idleState !== 'active' && settings.smartMonitoringEnabled) idleSince = Date.now() - IDLE_SECONDS * 1000;
+  if (idleState !== 'active' && settings.smartMonitoringEnabled) idleSince = Date.now() - awaySeconds() * 1000;
   restoring = false;
   lastState = machine().getData();
   if (lastState.state === APP_STATES.IDLE && idleSince === null) machine().transitionTo(APP_STATES.WORKING);
@@ -157,7 +162,7 @@ const ready = (async () => {
 
 let badge = '';
 function updateBadge(data: StateMachineData): void {
-  const minutes = (seconds: number) => `${Math.max(1, Math.ceil(seconds / 60))}m`;
+  const minutes = (seconds: number): string => `${Math.max(1, Math.ceil(seconds / 60))}m`;
   let text: string, color: string, title: string;
   if (data.isPaused) [text, color, title] = ['||', '#64748b', 'Reminders paused'];
   else if (data.state === APP_STATES.POPUP) [text, color, title] = ['!', '#f59e0b', 'Time for a break'];
@@ -166,7 +171,9 @@ function updateBadge(data: StateMachineData): void {
   else if (data.state === APP_STATES.IDLE) [text, color, title] = ['zz', '#64748b', 'Away — focus timer paused'];
   else {
     const left = data.skipSecondsLeft > 0 ? data.skipSecondsLeft : settings.workDuration * 60 - data.activeWorkSeconds;
-    [text, color, title] = [minutes(left), '#22a06b', `Next break in ${minutes(left)}`];
+    [text, color, title] = data.inMeeting
+      ? [minutes(left), '#0ea5e9', 'On a call — reminders wait until it ends']
+      : [minutes(left), '#22a06b', `Next break in ${minutes(left)}`];
   }
   const key = `${text}|${color}|${title}`;
   if (key === badge) return;
@@ -198,7 +205,7 @@ async function playSound(kind: 'chime' | 'worried'): Promise<void> {
 }
 
 // Ports are only open from tabs the user can see, so none means the buddy is out of sight.
-const buddyInView = () => [...ports].some(port => port.name === PORT_PAGE);
+const buddyInView = (): boolean => [...ports].some(port => port.name === PORT_PAGE);
 
 function remindBreak(data: StateMachineData): void {
   void playSound(data.skipsCount >= 3 ? 'worried' : 'chime');
@@ -219,6 +226,35 @@ function remindWater(): void {
     buttons: [{ title: 'Drank water' }, { title: 'Snooze 10m' }],
   });
 }
+
+// ---- Calls and meetings ----
+// Each tab's content script says when it's on a call (a live camera/mic stream, or a Meet or
+// Zoom meeting page) and repeats it every MEETING_REPEAT_MS. A tab that stops repeating
+// (closed, crashed, frozen) drops out after MEETING_TTL_MS. Background tabs' timers can slow
+// to once a minute, hence the long TTL.
+const MEETING_TTL_MS = 150_000;
+const meetingTabs = new Map<number, number>(); // tab → when its report expires
+
+function updateMeeting(): void {
+  scheduler.setInMeeting(settings.meetingAware && meetingTabs.size > 0);
+}
+
+function reportMeeting(tabId: number, active: boolean): void {
+  if (active) meetingTabs.set(tabId, Date.now() + MEETING_TTL_MS);
+  else meetingTabs.delete(tabId);
+  updateMeeting();
+}
+
+function expireMeetings(): void {
+  if (!meetingTabs.size) return;
+  const now = Date.now();
+  for (const [tabId, expires] of meetingTabs) if (expires < now) meetingTabs.delete(tabId);
+  if (!meetingTabs.size) updateMeeting();
+}
+
+chrome.tabs.onRemoved.addListener(tabId => {
+  if (meetingTabs.delete(tabId)) updateMeeting();
+});
 
 // ---- Messaging ----
 
@@ -251,7 +287,9 @@ function handleCall(message: Call): unknown {
       const previous = snapshot();
       saveSettings(message.patch);
       if (!settings.smartMonitoringEnabled) idleSince = null;
+      if (settings.awayMinutes !== previous.awayMinutes) chrome.idle.setDetectionInterval(awaySeconds());
       scheduler.handleSettingsChanged(previous);
+      updateMeeting();
       return snapshot();
     }
     case 'action': runAction(message.action); return null;
@@ -260,14 +298,20 @@ function handleCall(message: Call): unknown {
       // Input in a tab is proof you're back, even before chrome.idle catches up.
       if (idleSince !== null) handleIdleState('active');
       return null;
+    case 'meeting': return null; // handled with the sender's tab in onMessage
   }
 }
 
-const fromExtensionPage = (sender: chrome.runtime.MessageSender) => !!sender.url?.startsWith(extensionOrigin);
+const fromExtensionPage = (sender: chrome.runtime.MessageSender): boolean => !!sender.url?.startsWith(extensionOrigin);
 
 chrome.runtime.onMessage.addListener((message: Call, sender, sendResponse) => {
   if (typeof message?.type !== 'string') return false;
-  // Content scripts run inside web pages, so they may only report input.
+  if (message.type === 'meeting') {
+    const tabId = sender.tab?.id;
+    if (tabId !== undefined) void ready.then(() => reportMeeting(tabId, message.active === true));
+    return false;
+  }
+  // Content scripts run inside web pages, so they may only report input (and calls, above).
   if (message.type !== 'input' && !fromExtensionPage(sender)) return false;
   ready.then(() => sendResponse(handleCall(message)), () => sendResponse(null));
   return true;
@@ -301,3 +345,10 @@ chrome.alarms.onAlarm.addListener(() => { void ready; });
 void chrome.alarms.get('keepalive').then(alarm => {
   if (!alarm) void chrome.alarms.create('keepalive', { periodInMinutes: 0.5 });
 });
+
+// ---- Welcome and goodbye ----
+// First install: a one-page how-to. Uninstall: Chrome opens a one-question survey on the website.
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === chrome.runtime.OnInstalledReason.INSTALL) void chrome.tabs.create({ url: 'welcome.html' });
+});
+void chrome.runtime.setUninstallURL(`${WEBSITE_URL}goodbye.html?v=${chrome.runtime.getManifest().version}`);

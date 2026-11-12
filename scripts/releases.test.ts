@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 // @ts-expect-error Buildless site module has no TypeScript declarations.
 import { groupAssets, assetLabel } from '../website/dist/releases.mjs';
-const asset = (name: string, url?: string) => ({ name, state: 'uploaded', browser_download_url: url ?? `https://github.com/Harshit-Kandoi/pixel-buddy/releases/download/v1.0.0/${name}` });
+const asset = (name: string, url?: string): { name: string; state: string; browser_download_url: string } => ({ name, state: 'uploaded', browser_download_url: url ?? `https://github.com/Harshit-Kandoi/pixel-buddy/releases/download/v1.0.0/${name}` });
 describe('download catalogue', () => {
   test('matches the installer names produced by the release workflow', () => {
     const groups = groupAssets(['pixel-buddy-1.0.0-windows-x64.exe', 'pixel-buddy-1.0.0-mac-arm64.dmg', 'pixel-buddy-1.0.0-mac-x64.dmg', 'pixel-buddy-1.0.0-linux-x64.AppImage', 'pixel-buddy-1.0.0-linux-x64.deb'].map(name => asset(name)));

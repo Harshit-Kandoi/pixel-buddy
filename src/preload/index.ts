@@ -7,7 +7,7 @@ const api = {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   onSettingsUpdated: (callback) => {
-    const subscription = (_, settings) => callback(settings)
+    const subscription = (_, settings): void => callback(settings)
     ipcRenderer.on('settings:updated', subscription)
     return () => ipcRenderer.removeListener('settings:updated', subscription)
   },
@@ -21,12 +21,12 @@ const api = {
   reset: () => ipcRenderer.send('scheduler:reset'),
   togglePause: () => ipcRenderer.send('scheduler:toggle-pause'),
   onUpdate: (callback) => {
-    const subscription = (_, data) => callback(data)
+    const subscription = (_, data): void => callback(data)
     ipcRenderer.on('scheduler:update', subscription)
     return () => ipcRenderer.removeListener('scheduler:update', subscription)
   },
   onTick: (callback) => {
-    const subscription = (_, data) => callback(data)
+    const subscription = (_, data): void => callback(data)
     ipcRenderer.on('scheduler:tick', subscription)
     return () => ipcRenderer.removeListener('scheduler:tick', subscription)
   },
@@ -39,11 +39,17 @@ const api = {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('window:set-ignore-mouse-events', ignore),
   resize: (width, height) => ipcRenderer.send('window:resize', width, height),
   onShowSettings: (callback) => {
-    const subscription = () => callback()
+    const subscription = (): void => callback()
     ipcRenderer.on('window:show-settings', subscription)
     return () => ipcRenderer.removeListener('window:show-settings', subscription)
   },
   setSettingsVisible: (visible) => ipcRenderer.send('window:settings-visibility', visible),
+  isOnBattery: () => ipcRenderer.invoke('power:on-battery'),
+  onPowerChange: (callback) => {
+    const subscription = (_: unknown, onBattery: boolean): void => callback(onBattery)
+    ipcRenderer.on('power:changed', subscription)
+    return () => ipcRenderer.removeListener('power:changed', subscription)
+  },
   setHitRects: (rects) => ipcRenderer.send('window:hit-rects', rects),
   logHydration: () => ipcRenderer.send('scheduler:log-hydration'),
   snoozeHydration: () => ipcRenderer.send('scheduler:snooze-hydration'),

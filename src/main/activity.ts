@@ -1,13 +1,14 @@
 import { powerMonitor, systemPreferences, ipcMain } from 'electron';
 import { ACTIVITY_WEIGHTS } from '../utils/constants';
 
-let uIOhook: any = null;
+let uIOhook: typeof import('uiohook-napi').uIOhook | null = null;
 let uiohookLoaded = false;
 
 // Try loading uiohook-napi dynamically
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const module = require('uiohook-napi');
+  // Optional native module: loaded with require so a failure falls back to powerMonitor.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const module = require('uiohook-napi') as typeof import('uiohook-napi');
   uIOhook = module.uIOhook;
   uiohookLoaded = true;
   console.log('uiohook-napi loaded successfully');
@@ -24,11 +25,12 @@ export class ActivityMonitor {
   
   // High-level activity state
   private continuousIdleSeconds = 0;
+  private idleReported = false; // the "went away" callback fired for the current absence
   private isTracking = false;
   
-  // Callback when user returns from a long break (idle time >= 5 minutes)
+  // Callback when user returns after being away (no input for the away time)
   private onBreakDetectedCallback: (() => void) | null = null;
-  // Callback when user goes idle (no activity for 5 minutes)
+  // Callback when user goes idle (no input for the away time)
   private onIdleDetectedCallback: (() => void) | null = null;
   // Callback when user resumes activity after being idle
   private onActiveResumedCallback: (() => void) | null = null;
@@ -140,7 +142,8 @@ export class ActivityMonitor {
    */
   public tick(
     isStateWorking: boolean,
-    smartMonitoringEnabled = true
+    smartMonitoringEnabled = true,
+    awaySeconds = 300
   ): { isActiveThisSecond: boolean; currentMinuteScore: number } {
     let activeThisSecond = false;
     const hasPermission = this.checkAccessibilityPermission() && smartMonitoringEnabled;
@@ -172,38 +175,34 @@ export class ActivityMonitor {
     }
 
     if (activeThisSecond) {
-      // If they were idle (5 mins or more) and just returned
-      if (this.continuousIdleSeconds >= 300) {
+      // Back after being away (the away time is a setting, 5 minutes by default)
+      if (this.idleReported) {
         console.log(`User returned after a long idle period of ${this.continuousIdleSeconds}s.`);
-        
+
         if (isStateWorking) {
           // If they were in working mode, this idle period was a break!
           // We trigger the break detected callback (which resets the work timer)
-          if (this.onBreakDetectedCallback) {
-            this.onBreakDetectedCallback();
-          }
+          this.onBreakDetectedCallback?.();
         }
-        
-        if (this.onActiveResumedCallback) {
-          this.onActiveResumedCallback();
-        }
+
+        this.onActiveResumedCallback?.();
       }
       this.continuousIdleSeconds = 0;
+      this.idleReported = false;
     } else {
       this.continuousIdleSeconds++;
-      
-      // If we just hit exactly 5 minutes (300 seconds) of no activity, trigger idle callback
-      if (this.continuousIdleSeconds === 300) {
-        console.log('User went idle (5 minutes of no activity).');
-        if (this.onIdleDetectedCallback) {
-          this.onIdleDetectedCallback();
-        }
+
+      // Reported once per absence; ">=" so shortening the away time mid-absence still works.
+      if (this.continuousIdleSeconds >= awaySeconds && !this.idleReported) {
+        this.idleReported = true;
+        console.log(`User went idle (${awaySeconds}s of no activity).`);
+        this.onIdleDetectedCallback?.();
       }
     }
 
     // Accumulate time in the current minute
     this.secondsInCurrentMinute++;
-    let returnedMinuteScore = this.minuteScore;
+    const returnedMinuteScore = this.minuteScore;
 
     if (this.secondsInCurrentMinute >= 60) {
       // Reset minute stats
@@ -215,6 +214,12 @@ export class ActivityMonitor {
       isActiveThisSecond: activeThisSecond,
       currentMinuteScore: returnedMinuteScore,
     };
+  }
+
+  /** Count from now, as if there was input: a call just started or ended, and time on it isn't time away. */
+  public markActive(): void {
+    this.continuousIdleSeconds = 0;
+    this.idleReported = false;
   }
 
   public getContinuousIdleSeconds(): number {

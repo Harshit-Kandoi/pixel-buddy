@@ -45,9 +45,16 @@ const now = new Date();
 const festivalNow = activeFestival(now)?.festival ?? null;
 const comingUp = nextOfEach(now).filter((o) => o.firstDay > now).slice(0, 3).map((o) => o.festival.name);
 
-// A plain web page for the content script to run on.
+// A plain web page for the content script to run on, and /call: a page playing a live stream
+// the way a video call does (a canvas stands in for the camera).
+const CALL_PAGE = `<!doctype html><title>Call</title><body><video muted playsinline></video><script>
+const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+setInterval(() => { g.fillStyle = '#' + Math.floor(Math.random() * 4096).toString(16).padStart(3, '0'); g.fillRect(0, 0, 64, 64); }, 200);
+const v = document.querySelector('video'); v.srcObject = c.captureStream(5); v.play();
+</script></body>`;
 const site = createServer((req, res) => {
   res.writeHead(200, { "content-type": "text/html" });
+  if (req.url === "/call") return res.end(CALL_PAGE);
   res.end('<!doctype html><title>Test page</title><body style="font:16px sans-serif;padding:40px"><h1>Some website</h1><button id="b">Page button</button></body>');
 }).listen(PORT, "127.0.0.1");
 
@@ -114,6 +121,14 @@ try {
   const origin = `chrome-extension://${id}`;
   await send("Browser.setDownloadBehavior", { behavior: "allowAndName", downloadPath: downloads });
   const worker = await attach((await findTarget((t) => t.type === "service_worker" && t.url.startsWith(origin), "service worker")).targetId);
+  const welcome = await findTarget((t) => t.url === `${origin}/welcome.html`, "the welcome page").catch(() => null);
+  check("First install opens the welcome page", !!welcome);
+  if (welcome) {
+    const welcomePage = await attach(welcome.targetId);
+    const steps = await waitFor(() => evaluate(welcomePage, `document.querySelectorAll('li').length || null`), "welcome steps");
+    check("Welcome page explains the basics", steps === 5, `${steps} steps`);
+    await send("Target.closeTarget", { targetId: welcome.targetId });
+  }
 
   // The buddy on an ordinary web page
   const { targetId: pageId } = await send("Target.createTarget", { url: `http://127.0.0.1:${PORT}/` });
@@ -299,6 +314,27 @@ try {
   await evaluate(popup, `document.querySelector('.water-log-buttons .btn-primary').click()`, true);
   check("A glass added in the popup reaches the tab", await waitFor(() => evaluate(frame, `window.api.getSettings().then(s => s.hydrationDrankToday === ${popupGlasses + 1})`), "the glass in the tab").catch(() => false));
 
+  // Calls: a tab playing a live stream holds reminders; closing it lets them through again.
+  const { targetId: callId } = await send("Target.createTarget", { url: `http://127.0.0.1:${PORT}/call` });
+  const onCall = await waitFor(() => evaluate(frame, `window.api.getState().then(d => d.inMeeting || null)`), "the call to be noticed", 25000).catch(() => false);
+  check("A tab on a video call holds reminders", onCall === true);
+  const callTitle = await evaluate(worker, `chrome.action.getTitle({})`);
+  check("Toolbar says reminders wait during the call", /On a call/.test(callTitle), callTitle);
+  // Back to the page tab while the call goes on in the background (hidden tabs' buddies don't update).
+  await send("Target.activateTarget", { targetId: pageId });
+  check("Buddy wears its headphones badge", await waitFor(() => evaluate(frame, `!!document.querySelector('.buddy-mood-call') || null`), "call badge").catch(() => false));
+  await send("Target.closeTarget", { targetId: callId });
+  check("Closing the call tab ends the hold", await waitFor(() => evaluate(frame, `window.api.getState().then(d => d.inMeeting === false || null)`), "the call to end").catch(() => false));
+
+  // Mood: skipping a break makes the buddy tired.
+  await send("Target.activateTarget", { targetId: pageId });
+  await evaluate(frame, `window.api.skip()`);
+  check("Skipping a break makes the buddy tired", await waitFor(() => evaluate(frame, `!!document.querySelector('.buddy-mood-tired') || null`), "tired badge").catch(() => false));
+
+  // Away time setting reaches the worker.
+  await evaluate(frame, `window.api.saveSettings({ awayMinutes: 2 })`);
+  check("Away time can be changed", await waitFor(() => evaluate(worker, `chrome.storage.local.get('settings').then(s => s.settings.awayMinutes === 2 || null)`), "away time").catch(() => false));
+
   // Upgrade from 1.0.0: old settings without the new fields, then a cold start of the worker
   // (the same startup path an update takes).
   await evaluate(worker, `chrome.storage.local.set({ settings: { workDuration: 25, breakDuration: 5, snoozeDuration: 30, sound: true, userName: 'Old user', hydrationGoal: 6, themeHue: 200 } })`);
@@ -308,8 +344,8 @@ try {
   await waitFor(async () => !(await targets()).some((t) => t.type === "service_worker" && t.url.startsWith(origin)), "the worker to stop", 15000);
   const { targetId: freshId } = await send("Target.createTarget", { url: `${origin}/popup.html` });
   const fresh = await attach(freshId);
-  const upgraded = await waitFor(() => evaluate(fresh, `window.api?.getSettings().then(s => s && ({ work: s.workDuration, name: s.userName, skin: s.avatarSkin, askAt: s.reviewAskAt, lifetime: s.lifetimeBreaksCompleted }))`), "upgraded settings");
-  check("Upgrade keeps old settings and adds the new ones", upgraded.work === 25 && upgraded.name === "Old user" && upgraded.skin === "auto" && upgraded.askAt === 3 && upgraded.lifetime === 0, JSON.stringify(upgraded));
+  const upgraded = await waitFor(() => evaluate(fresh, `window.api?.getSettings().then(s => s && ({ work: s.workDuration, name: s.userName, skin: s.avatarSkin, askAt: s.reviewAskAt, lifetime: s.lifetimeBreaksCompleted, away: s.awayMinutes, calls: s.meetingAware }))`), "upgraded settings");
+  check("Upgrade keeps old settings and adds the new ones", upgraded.work === 25 && upgraded.name === "Old user" && upgraded.skin === "auto" && upgraded.askAt === 3 && upgraded.lifetime === 0 && upgraded.away === 5 && upgraded.calls === true, JSON.stringify(upgraded));
 } catch (error) {
   check("Test run finished", false, error.message);
 } finally {

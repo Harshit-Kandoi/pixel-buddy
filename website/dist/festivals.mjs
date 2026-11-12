@@ -3,12 +3,12 @@
 export const FESTIVALS = [
   { skin: 'newyear', name: 'New Year', emoji: '🎉', annual: '01-01', before: 1, after: 1 },
   { skin: 'sankranti', name: 'Sankranti & Pongal', emoji: '🪁', annual: '01-14', before: 1, after: 1 },
-  { skin: 'lunarnewyear', name: 'Lunar New Year', emoji: '🧧', dates: ['2027-02-06', '2028-01-26'], before: 1, after: 3 },
-  { skin: 'eid', name: 'Eid', emoji: '🌙', dates: ['2027-03-10', '2027-05-17', '2028-02-27'], before: 1, after: 2 },
-  { skin: 'holi', name: 'Holi', emoji: '🎨', dates: ['2027-03-22', '2028-03-11'], before: 1, after: 1 },
-  { skin: 'onam', name: 'Onam', emoji: '🌼', dates: ['2027-09-12', '2028-09-01'], before: 2, after: 1 },
+  { skin: 'lunarnewyear', name: 'Lunar New Year', emoji: '🧧', dates: ['2027-02-06', '2028-01-26', '2029-02-13', '2030-02-03'], before: 1, after: 3 },
+  { skin: 'eid', name: 'Eid', emoji: '🌙', dates: ['2027-03-10', '2027-05-17', '2028-02-27', '2028-05-05', '2029-02-14', '2029-04-24', '2030-02-04', '2030-04-13'], before: 1, after: 2 },
+  { skin: 'holi', name: 'Holi', emoji: '🎨', dates: ['2027-03-22', '2028-03-11', '2029-03-01', '2030-03-20'], before: 1, after: 1 },
+  { skin: 'onam', name: 'Onam', emoji: '🌼', dates: ['2027-09-12', '2028-09-01', '2029-08-22', '2030-09-09'], before: 2, after: 1 },
   { skin: 'halloween', name: 'Halloween', emoji: '🎃', annual: '10-31', before: 1, after: 0 },
-  { skin: 'diwali', name: 'Diwali', emoji: '🪔', dates: ['2026-11-08', '2027-10-29', '2028-10-17'], before: 3, after: 3 },
+  { skin: 'diwali', name: 'Diwali', emoji: '🪔', dates: ['2026-11-08', '2027-10-29', '2028-10-17', '2029-11-05', '2030-10-26'], before: 3, after: 3 },
   { skin: 'christmas', name: 'Christmas', emoji: '🎄', annual: '12-25', before: 3, after: 1 },
 ];
 

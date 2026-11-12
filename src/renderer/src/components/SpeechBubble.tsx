@@ -25,7 +25,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
 }) => {
   const displayName = userName && userName.trim() ? userName.trim() : 'there';
 
-  const getDialogueText = () => {
+  const getDialogueText = (): string => {
     if (customDialogue) return customDialogue;
     switch (state) {
       case 'BREAK':

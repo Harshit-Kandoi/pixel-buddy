@@ -34,18 +34,23 @@ These builds have no trusted publisher signature or Apple notarization. macOS Ga
 - Pause or resume reminders from the timer widget or system tray. Reset clears old cooldowns and starts fresh.
 - Use break reminders with snooze and skip controls. Smart monitoring pauses focus while away and recognizes long offline breaks. During a break, a few seconds of steady typing or mousing means you're back and ends the break early; using Pixel Buddy itself (clicking it, settings) doesn't count.
 - Breaks are guided: the buddy leads a short stretch, a 20-20-20 eye refresh, or a breathing routine, and acts out each step.
+- Choose how long without input counts as away (**Settings → Away After**, 2–15 minutes; 5 by default). Being away that long also counts as a break.
+- **Quiet during calls** holds break and water reminders until a call ends, and sitting still on a call doesn't count as being away. On Windows it notices any app using the microphone; on macOS it notices Zoom meetings; the Chrome extension notices calls in any tab (Meet, Zoom, Teams, or any page using your camera or microphone).
+- The buddy has moods: 🎧 on a call, ✨ for a minute after a finished break, and 😪 (a little dimmer, a slower float) after you skip or snooze a break or focus for 90 minutes straight.
 - Turn off smart monitoring to use regular timers. In that mode, mouse activity does not interrupt a break.
 - Track glasses of water and set your reminder interval. **Dashboard → + Add a glass** logs water you drank away from the computer. Daily counters reset at midnight, including when the app stays open.
 - **Dashboard → Share my day** saves or copies a picture of today's focus time, breaks, and water, sized for social posts.
-- Limited-time festival buddies: during a festival the buddy turns into that festival's character (New Year, Sankranti & Pongal, Lunar New Year, Eid, Holi, Onam, Halloween, Diwali, Christmas). Take 3 breaks while it lasts to claim it and keep it; otherwise it's gone until next year. Festival dates live in `src/utils/seasons.ts` (mirrored in `website/dist/festivals.mjs`, kept in sync by a test); add future years for the lunar festivals there.
+- Limited-time festival buddies: during a festival the buddy turns into that festival's character (New Year, Sankranti & Pongal, Lunar New Year, Eid, Holi, Onam, Halloween, Diwali, Christmas). Take 3 breaks while it lasts to claim it and keep it; otherwise it's gone until next year. Festival dates live in `src/utils/seasons.ts` (mirrored in `website/dist/festivals.mjs`, kept in sync by a test) and run through 2030. Moon-based festivals need their dates added by hand: `node scripts/check-festival-dates.mjs` (run on every pull request and release) shows a warning once any festival has less than 9 months of dates left. Festive animations play for a few seconds when the buddy wakes or while you hover over it, then hold still, since an animating outfit costs about 3× the CPU of the float alone.
 - Start with the illustrated robot mascot. Drop a PNG, GIF, WebP, JPG, AVIF, SVG, MP4, MOV, or WebM onto the buddy, or select one in settings. Use your own alarm sound and colors.
+- Light on battery: after 20 seconds with nothing happening the buddy rests. It stops floating, festival outfits hold still, video avatars pause and animated GIFs hold their frame, with one gentle bob every 45 seconds. Reminders, breaks, clicks, and hovering over the buddy wake it. Measured on a MacBook, an idle resting buddy uses about 1–2% of one CPU core (classic, festival, or video avatar), down from 12% (classic) and 40% (festival). On battery power, the desktop app suggests a picture, GIF, or the classic buddy instead of a video.
+- For a see-through custom avatar, use a file with a real transparent background (or a green-screen video). Many "transparent" downloads have the checkerboard drawn into the picture; settings detect that and explain how to remove the background (macOS: right-click in Finder → Quick Actions → Remove Background; Windows 11: Paint → Remove background).
 - Preferences and personal media stay in the local app data directory. The app works without a network connection.
 
 On macOS, optional smart monitoring uses Accessibility permission: **System Settings → Privacy & Security → Accessibility → Pixel Buddy**. Without permission, basic system idle detection is used. You can also disable monitoring entirely.
 
 ## Develop
 
-Use Node.js 22 LTS with npm.
+Use Node.js 22 LTS with npm. `npm run lint` must pass with no errors: the **Checks** workflow runs lint, type checks, unit tests, and the festival-date warning on every pull request (add it as a required status check in the `main` ruleset to enforce it).
 
 ```bash
 npm ci
@@ -92,13 +97,14 @@ To test the built extension end to end before a release:
 npm run ext:test
 ```
 
-It installs the build into a throwaway headless Chrome profile (your own profile is never touched) and uses it on a real web page with real clicks: the buddy overlay, a guided break, settings and the festival calendar, water logging, the share card, the rating prompt, a real one-minute break, the toolbar popup, and an upgrade from 1.0.0 settings. It takes about 90 seconds; add `-- --quick` to skip the one-minute break. Needs Google Chrome 126 or later (set `CHROME_PATH` if Chrome isn't in the usual place).
+It installs the build into a throwaway headless Chrome profile (your own profile is never touched) and uses it on a real web page with real clicks: the buddy overlay, a guided break, settings and the festival calendar, water logging, the share card, the rating prompt, a real one-minute break, the toolbar popup, the welcome page, call detection with a live video stream, the buddy's moods, the away-time setting, and an upgrade from 1.0.0 settings. It takes about 90 seconds; add `-- --quick` to skip the one-minute break. Needs Google Chrome 126 or later (set `CHROME_PATH` if Chrome isn't in the usual place).
 
 - Everything in [Make yourself at home](#make-yourself-at-home) works here too, including guided breaks, festival buddies, water logging (also from the toolbar popup), and Share my day.
 - Drag the buddy anywhere; its position is shared across tabs. Clicks pass through the empty space around it.
 - The toolbar icon shows minutes until your next break. Its popup opens settings and stats, plus a **Show on pages** switch. In the extension, **Quit Pixel Buddy** hides the buddy from pages until you switch it back on.
 - When no visible tab is showing the buddy, break and water reminders arrive as system notifications instead.
 - Smart monitoring uses Chrome's idle detection and your activity in browser tabs.
+- First install opens a one-page welcome guide (`extension/public/welcome.html`). Uninstalling opens a one-question survey on the website (`website/dist/goodbye.html`, collected with Netlify Forms).
 - Custom buddies and alarm sounds are desktop-only for now. The extension uses the built-in robot (with its festive outfits) and chime. Chrome can't show the buddy on its own pages, like `chrome://` pages and the Web Store.
 
 ## Releases
@@ -137,7 +143,7 @@ Open `http://localhost:4173`. No website dependencies or build step are needed. 
 
 ### Deploy to Netlify
 
-The root `netlify.toml` deploys only `website/dist/` and runs `node scripts/check-website.mjs` to validate its assets and links. It skips the build unless `website/`, the check script, or `netlify.toml` changed, so app releases and the release bot's version commits don't use Netlify credits. GitHub Pages publishes the same site for free; if you don't use the Netlify address, you can disconnect the site in Netlify. It overrides the desktop build command and publish directory configured in the Netlify dashboard.
+The root `netlify.toml` deploys only `website/dist/` and runs `node scripts/check-website.mjs` to validate its assets and links. It skips the build unless `website/`, the check script, or `netlify.toml` changed, so app releases and the release bot's version commits don't use Netlify credits. The live site is **https://pixelbuddy.harshitkandoi.in/** (Netlify, also at pixelbuddyweb.netlify.app). Netlify Forms collects the extension's uninstall survey (`goodbye.html`). GitHub Pages publishes a backup copy of the same site. It overrides the desktop build command and publish directory configured in the Netlify dashboard.
 
 Netlify installs npm dependencies with `--ignore-scripts`, skipping the Electron postinstall rebuild and native dependency install scripts. This website does not need those packages. Desktop dependencies remain in `dependencies` so electron-builder can include them in installers; local development and desktop release workflows keep their normal install and build behavior. Do not use `npm run build` for this static website: that command builds the Electron app.
 

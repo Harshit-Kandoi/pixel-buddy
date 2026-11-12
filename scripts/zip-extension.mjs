@@ -1,5 +1,6 @@
 // Packs the built extension (out/extension) into a Chrome Web Store upload:
 // release/pixel-buddy-extension-<version>.zip, with manifest.json at the zip root.
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- Node runs this plain JavaScript directly. */
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, relative, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
