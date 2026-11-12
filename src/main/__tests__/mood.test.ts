@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TIRED_AFTER_SECONDS, buddyMood, finishedBreak } from '../../utils/mood';
+import { TIRED_AFTER_SECONDS, buddyMood, finishedBreak, moodReason } from '../../utils/mood';
 import type { StateMachineData } from '../../utils/types';
 
 const data = (patch: Partial<StateMachineData> = {}): StateMachineData => ({
@@ -43,5 +43,13 @@ describe('buddy mood', () => {
     expect(finishedBreak(data({ state: 'BREAK', breakSecondsLeft: 0 }), data())).toBe(true);
     expect(finishedBreak(data({ state: 'BREAK', breakSecondsLeft: 200 }), data())).toBe(false); // back to work early
     expect(finishedBreak(null, data())).toBe(false);
+  });
+
+  it('explains itself when clicked', () => {
+    expect(moodReason('call', data({ inMeeting: true }))).toMatch(/on a call/);
+    expect(moodReason('happy', data())).toMatch(/proper break/);
+    expect(moodReason('tired', data({ state: 'SNOOZE' }))).toMatch(/snoozed/);
+    expect(moodReason('tired', data({ skipsCount: 2 }))).toMatch(/skipped 2 breaks/);
+    expect(moodReason('tired', data({ activeWorkSeconds: TIRED_AFTER_SECONDS }))).toMatch(/90 minutes of focus/);
   });
 });

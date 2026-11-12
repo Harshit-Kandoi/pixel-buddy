@@ -9,15 +9,19 @@ export class TrayManager {
   private onOpenSettings: () => void;
   private onTogglePause: () => void;
   private onReset: () => void;
+  private startup?: { isOn: () => boolean; toggle: () => void };
 
   constructor(
     onOpenSettings: () => void,
     onTogglePause: () => void,
-    onReset: () => void
+    onReset: () => void,
+    /** "Open at Login" checkbox: read the setting and flip it. */
+    startup?: { isOn: () => boolean; toggle: () => void }
   ) {
     this.onOpenSettings = onOpenSettings;
     this.onTogglePause = onTogglePause;
     this.onReset = onReset;
+    this.startup = startup;
   }
 
   public init(): void {
@@ -95,7 +99,8 @@ export class TrayManager {
       }
     }
 
-    const menuKey = `${statusText}:${timeText}:${data.isPaused}`;
+    const startsAtLogin = this.startup?.isOn() ?? false;
+    const menuKey = `${statusText}:${timeText}:${data.isPaused}:${startsAtLogin}`;
     if (menuKey === this.lastMenuKey) return;
     this.lastMenuKey = menuKey;
     const contextMenu = Menu.buildFromTemplate([
@@ -105,6 +110,9 @@ export class TrayManager {
       { label: data.isPaused ? 'Resume Reminders' : 'Pause Reminders', click: () => this.onTogglePause() },
       { label: 'Reset Timer', click: () => this.onReset() },
       { type: 'separator' },
+      ...(this.startup
+        ? [{ label: 'Open at Login', type: 'checkbox' as const, checked: startsAtLogin, click: () => this.startup?.toggle() }, { type: 'separator' as const }]
+        : []),
       { label: 'Quit Pixel Buddy', click: () => app.quit() },
     ]);
 

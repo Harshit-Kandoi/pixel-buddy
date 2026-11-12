@@ -245,9 +245,20 @@ app.whenReady().then(() => {
     // Reset Timer Clicked
     () => {
       scheduler.handleReset();
+    },
+    // Open at Login checkbox
+    {
+      isOn: () => settingsManager.getSettings().startOnBoot,
+      toggle: () => {
+        settingsManager.save({ startOnBoot: !settingsManager.getSettings().startOnBoot });
+        trayManager.updateMenu(scheduler.getStateMachine().getData());
+      },
     }
   );
   trayManager.init();
+  // Open at login: make the system match the setting (see syncLoginItem).
+  settingsManager.syncLoginItem();
+  ipcMain.handle('app:login-item-status', () => settingsManager.loginItemStatus());
 
   // Create buddy window
   createWindow();

@@ -3,6 +3,7 @@ import type { SettingsManager } from '../../src/main/settings';
 import type { ActivityMonitor } from '../../src/main/activity';
 import { APP_STATES, DEFAULT_SETTINGS, awaySecondsFor } from '../../src/utils/constants';
 import { WEBSITE_URL } from '../../src/utils/links';
+import { fitForSync, mergeNotes } from '../../src/utils/notes';
 import type { AppSettings, StateMachineData } from '../../src/utils/types';
 import { KEY_SETTINGS, PORT_PAGE, PORT_POPUP, type Call, type Push, type SchedulerAction } from './protocol';
 
@@ -25,7 +26,30 @@ function saveSettings(patch: Partial<AppSettings>): void {
   settings = { ...settings, ...patch };
   void chrome.storage.local.set({ [KEY_SETTINGS]: settings });
   broadcast({ type: 'settings', settings: snapshot() });
+  if ('breakNotes' in patch) pushNotesToSync();
 }
+
+// ---- Break notes follow you through Chrome sync (when it's on; otherwise this is local only) ----
+
+const KEY_SYNC_NOTES = 'breakNotes';
+let syncedNotes = '';
+
+function pushNotesToSync(): void {
+  const json = JSON.stringify(fitForSync(settings.breakNotes ?? []));
+  if (json === syncedNotes) return;
+  syncedNotes = json;
+  chrome.storage.sync.set({ [KEY_SYNC_NOTES]: JSON.parse(json) }).catch((error) => console.warn('Could not sync notes:', error));
+}
+
+function pullNotesFromSync(remote: unknown): void {
+  const merged = mergeNotes(settings.breakNotes, remote);
+  if (JSON.stringify(merged) !== JSON.stringify(settings.breakNotes ?? [])) saveSettings({ breakNotes: merged });
+  else pushNotesToSync();
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && KEY_SYNC_NOTES in changes) void ready.then(() => pullNotesFromSync(changes[KEY_SYNC_NOTES].newValue));
+});
 
 function checkDailyReset(): void {
   const today = new Date().toLocaleDateString('en-CA');
@@ -149,6 +173,7 @@ const ready = (async () => {
   // Custom media and sounds live on disk in the desktop app; the extension uses the defaults.
   settings = { ...DEFAULT_SETTINGS, ...stored[KEY_SETTINGS], mediaLibrary: [], customVideoPath: null, customSoundPath: null };
   chrome.idle.setDetectionInterval(awaySeconds());
+  pullNotesFromSync((await chrome.storage.sync.get(KEY_SYNC_NOTES).catch(() => ({})) as Record<string, unknown>)[KEY_SYNC_NOTES]);
   scheduler.start(handleTick);
   restore(session[KEY_MACHINE]);
   if (idleState !== 'active' && settings.smartMonitoringEnabled) idleSince = Date.now() - awaySeconds() * 1000;

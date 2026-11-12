@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppSettings } from '../../../utils/types';
 import { AWAY_MINUTE_CHOICES } from '../../../utils/constants';
+import { notesAsText, removeNote, visibleNotes } from '../../../utils/notes';
 import { toMediaUrl } from '../../../utils/mediaUrl';
 import { AVATAR_SKINS } from '../avatars';
 import { drawShareCard, downloadBlob } from '../shareCard';
@@ -15,9 +16,18 @@ interface SettingsProps {
   onHeaderMouseDown?: (e: React.MouseEvent) => void;
 }
 
+const IN_EXTENSION_PAGE = location.protocol === 'chrome-extension:';
+// "3:10 pm" for today's notes, "11 Nov" for older ones.
+function noteTime(at: number): string {
+  const date = new Date(at);
+  return date.toDateString() === new Date().toDateString()
+    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
 // What "Quiet during calls" can see differs by platform (see src/main/meetings.ts).
 const CALL_DETECTION_HELP =
-  location.protocol === 'chrome-extension:'
+  IN_EXTENSION_PAGE
     ? 'Break and water reminders wait while a tab is on a call (Meet, Zoom, Teams, any camera or mic call).'
     : navigator.userAgent.includes('Windows')
       ? 'Break and water reminders wait while any app is using your microphone.'
@@ -68,12 +78,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     return () => { current = false; };
   }, []);
 
+  // What the system will really do at login (macOS may be waiting for the user to allow it).
+  const [loginItem, setLoginItem] = useState<{ enabled: boolean; needsApproval: boolean } | null>(null);
+  const refreshLoginItem = useCallback(() => {
+    window.api.getLoginItemStatus().then(setLoginItem).catch(() => {});
+  }, []);
+  useEffect(() => {
+    let current = true;
+    window.api.getLoginItemStatus().then((status) => { if (current) setLoginItem(status); }).catch(() => {});
+    return () => { current = false; };
+  }, []);
+
   // When settings change elsewhere (another tab, the tray, the scheduler), follow them. This
   // adjusts state while rendering, React's recommended alternative to syncing in an effect.
   const [syncedSettings, setSyncedSettings] = useState(settings);
   if (settings !== syncedSettings) {
     setSyncedSettings(settings);
     setWorkDuration(settings.workDuration);
+    setStartOnBoot(settings.startOnBoot);
     setBreakDuration(settings.breakDuration);
     setSnoozeDuration(settings.snoozeDuration);
     setCustomVideoPath(settings.customVideoPath);
@@ -98,9 +120,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
     return () => clearInterval(interval);
   }, []);
 
+  // Set once "Grant Access" was clicked but the app still isn't trusted: the switch in System
+  // Settings is off, or it's on for an older copy of the app (see the hint below).
+  const [askedPermission, setAskedPermission] = useState(false);
   const handleGrantPermission = async (): Promise<void> => {
     const granted = await window.api.requestPermission();
     setHasPermission(granted);
+    if (!granted) setAskedPermission(true);
   };
 
   const handleSave = <K extends keyof AppSettings>(key: K, value: AppSettings[K]): void => {
@@ -144,6 +170,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
   };
 
   const [shareStatus, setShareStatus] = useState('');
+  const notes = visibleNotes(settings.breakNotes);
 
   // Is the chosen picture really see-through? (A drawn-in checkerboard or a solid background
   // shows as a box.) Videos get the green-screen hint instead.
@@ -713,6 +740,22 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
 
               <div className="switch-row">
                 <div className="switch-label-group">
+                  <span className="switch-label">Buddy Moods</span>
+                  <span className="switch-sublabel">A small badge: 🎧 on a call, ✨ after a break, 😪 after a skipped or snoozed one. Click it to see why.</span>
+                </div>
+                <label className="switch non-draggable">
+                  <input
+                    type="checkbox"
+                    aria-label="Show buddy moods"
+                    checked={settings.showMoods ?? true}
+                    onChange={(e) => handleSave('showMoods', e.target.checked)}
+                  />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
+              <div className="switch-row">
+                <div className="switch-label-group">
                   <span className="switch-label">Sound Effects</span>
                   <span className="switch-sublabel">Play chimes on break reminders and buddy clicks</span>
                 </div>
@@ -730,24 +773,31 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 </label>
               </div>
 
-              <div className="switch-row">
-                <div className="switch-label-group">
-                  <span className="switch-label">Start on Boot</span>
-                  <span className="switch-sublabel">Launch Pixel Buddy automatically when your PC starts</span>
+              {!IN_EXTENSION_PAGE && (
+                <div className="switch-row">
+                  <div className="switch-label-group">
+                    <span className="switch-label">Open at Login</span>
+                    <span className="switch-sublabel">
+                      {loginItem?.needsApproval && startOnBoot
+                        ? 'macOS needs your OK: System Settings → General → Login Items → turn on Pixel Buddy.'
+                        : 'Start Pixel Buddy when you sign in. Turn off to open it yourself. Also in the tray menu.'}
+                    </span>
+                  </div>
+                  <label className="switch non-draggable">
+                    <input
+                      type="checkbox"
+                      aria-label="Open at login" checked={startOnBoot}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setStartOnBoot(val);
+                        handleSave('startOnBoot', val);
+                        setTimeout(refreshLoginItem, 500);
+                      }}
+                    />
+                    <span className="slider"></span>
+                  </label>
                 </div>
-                <label className="switch non-draggable">
-                  <input
-                    type="checkbox"
-                    aria-label="Start on boot" checked={startOnBoot}
-                    onChange={(e) => {
-                      const val = e.target.checked;
-                      setStartOnBoot(val);
-                      handleSave('startOnBoot', val);
-                    }}
-                  />
-                  <span className="slider"></span>
-                </label>
-              </div>
+              )}
             </div>
 
             {/* Away time and calls */}
@@ -822,14 +872,21 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                     {!hasPermission && (
                       <button 
                         className="btn btn-grant non-draggable" 
-                        onClick={handleGrantPermission}
+                        onClick={askedPermission ? () => void window.api.openPermissionSettings() : handleGrantPermission}
                       >
-                        Grant Access
+                        {askedPermission ? 'Open Settings' : 'Grant Access'}
                       </button>
                     )}
                   </>
                 )}
               </div>
+              {!hasPermission && askedPermission && (
+                <p className="permission-hint">
+                  Turn on <b>Pixel Buddy</b> in Privacy &amp; Security → Accessibility. Already on? macOS may still
+                  remember an older copy of the app: turn it off and on again (or remove it with − and add it back).
+                  This updates by itself within a few seconds.
+                </p>
+              )}
             </div>
           </>
         ) : (
@@ -904,6 +961,37 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                   ? "Great job staying productive today! Keep maintaining your focus streaks."
                   : "Let's start focusing! Your pixel companion is waiting to check in."}
               </div>
+            </div>
+
+            {/* Break notes: what you were doing before each break */}
+            <div className="dashboard-stats-card notes-card">
+              <div className="stat-card-title">Break Notes</div>
+              {notes.length ? (
+                <ul className="notes-list">
+                  {notes.slice(0, 5).map((note) => (
+                    <li key={note.id}>
+                      <time dateTime={new Date(note.at).toISOString()}>{noteTime(note.at)}</time>
+                      <span className="note-text">{note.text}</span>
+                      <button type="button" className="non-draggable" aria-label={`Delete note: ${note.text}`} title="Delete" onClick={() => onSave({ breakNotes: removeNote(settings.breakNotes, note.id) })}>✕</button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="notes-empty">When a break is due, jot what you were doing. Your buddy shows it when you&apos;re back.</p>
+              )}
+              {notes.length > 0 && (
+                <div className="notes-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm non-draggable"
+                    title={`Save all ${notes.length} notes as a text file`}
+                    onClick={() => downloadBlob(new Blob([notesAsText(settings.breakNotes)], { type: 'text/plain' }), 'pixel-buddy-notes.txt')}
+                  >
+                    Export notes
+                  </button>
+                </div>
+              )}
+              {IN_EXTENSION_PAGE && <p className="notes-empty">With Chrome sync on, your notes follow you to your other computers.</p>}
             </div>
 
             {/* Share today's stats as an image */}

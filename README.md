@@ -36,7 +36,9 @@ These builds have no trusted publisher signature or Apple notarization. macOS Ga
 - Breaks are guided: the buddy leads a short stretch, a 20-20-20 eye refresh, or a breathing routine, and acts out each step.
 - Choose how long without input counts as away (**Settings → Away After**, 2–15 minutes; 5 by default). Being away that long also counts as a break.
 - **Quiet during calls** holds break and water reminders until a call ends, and sitting still on a call doesn't count as being away. On Windows it notices any app using the microphone; on macOS it notices Zoom meetings; the Chrome extension notices calls in any tab (Meet, Zoom, Teams, or any page using your camera or microphone).
-- The buddy has moods: 🎧 on a call, ✨ for a minute after a finished break, and 😪 (a little dimmer, a slower float) after you skip or snooze a break or focus for 90 minutes straight.
+- **Break notes**: when a break is due, type what you were doing ("fixing the login bug, line 42") and press Enter to start the break. When you're back, the buddy shows it. **Dashboard → Break Notes** lists recent notes and exports them as a text file. In the extension, notes follow you to your other computers through Chrome sync (when it's on).
+- **Open at Login** (Settings or the tray menu) starts Pixel Buddy when you sign in; turn it off to open it yourself. On macOS, approve it once under System Settings → General → Login Items if asked.
+- The buddy has moods: 🎧 on a call, ✨ for a minute after a finished break, and 😪 (a little dimmer, a slower float) after you skip or snooze a break or focus for 90 minutes straight. Click the badge and the buddy says why; turn moods off with **Settings → Buddy Moods**.
 - Turn off smart monitoring to use regular timers. In that mode, mouse activity does not interrupt a break.
 - Track glasses of water and set your reminder interval. **Dashboard → + Add a glass** logs water you drank away from the computer. Daily counters reset at midnight, including when the app stays open.
 - **Dashboard → Share my day** saves or copies a picture of today's focus time, breaks, and water, sized for social posts.

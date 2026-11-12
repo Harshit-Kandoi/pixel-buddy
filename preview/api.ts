@@ -46,6 +46,7 @@ window.api = {
   onTick: callback => subscribe(ticks, callback),
   getPermissionStatus: async () => false,
   requestPermission: async () => { desktopOnly(); return false; },
+  openPermissionSettings: async () => { desktopOnly(); },
   setIgnoreMouseEvents: noop,
   resize(width, height) {
     const root = document.getElementById('root')!;
@@ -66,6 +67,7 @@ window.api = {
   selectSound: async () => { desktopOnly(); return null; },
   resetSound: async () => null,
   quit: desktopOnly,
+  getLoginItemStatus: async () => null,
   isOnBattery: async () => false,
   onPowerChange: () => () => {},
   showWindow: noop, hideWindow: noop,

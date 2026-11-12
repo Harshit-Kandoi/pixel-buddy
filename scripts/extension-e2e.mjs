@@ -330,10 +330,38 @@ try {
   await send("Target.activateTarget", { targetId: pageId });
   await evaluate(frame, `window.api.skip()`);
   check("Skipping a break makes the buddy tired", await waitFor(() => evaluate(frame, `!!document.querySelector('.buddy-mood-tired') || null`), "tired badge").catch(() => false));
+  await clickInFrame(".buddy-mood");
+  const why = await waitFor(() => evaluate(frame, `(t => /skipped/.test(t) ? t : null)(document.querySelector('.speech-bubble')?.innerText || '')`), "the mood explained").catch(() => "");
+  check("Clicking the badge says why", /skipped a break/.test(why), why.split("\n")[0]);
+  await evaluate(frame, `window.api.saveSettings({ showMoods: false })`);
+  check("Moods can be turned off", await waitFor(() => evaluate(frame, `!document.querySelector('.buddy-mood') || null`), "no badge").catch(() => false));
+  await evaluate(frame, `window.api.saveSettings({ showMoods: true })`);
 
   // Away time setting reaches the worker.
   await evaluate(frame, `window.api.saveSettings({ awayMinutes: 2 })`);
   check("Away time can be changed", await waitFor(() => evaluate(worker, `chrome.storage.local.get('settings').then(s => s.settings.awayMinutes === 2 || null)`), "away time").catch(() => false));
+
+  // Break notes: jot what you're doing at the reminder, see it when you're back.
+  await send("Target.activateTarget", { targetId: pageId });
+  await evaluate(frame, `window.api.reset()`);
+  await evaluate(frame, `window.api.saveSettings({ skipDuration: 0.05 })`);
+  await evaluate(frame, `window.api.skip()`);
+  await waitFor(() => evaluate(frame, `!!document.querySelector('.break-note-input') || null`), "the break reminder", 15000);
+  check("Break reminder offers a note", true);
+  await clickInFrame(".break-note-input");
+  await send("Input.insertText", { text: "fixing the login bug, line 42" }, page);
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 }, page);
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 }, page);
+  const noted = await waitFor(() => evaluate(frame, `Promise.all([window.api.getState(), window.api.getSettings()]).then(([d, s]) => d.state === 'BREAK' && s.breakNotes[0]?.text || null)`), "the break with a note").catch(() => null);
+  check("Typing a note and pressing Enter starts the break", noted === "fixing the login bug, line 42", noted ?? "");
+  const synced = await waitFor(() => evaluate(worker, `chrome.storage.sync.get('breakNotes').then(s => s.breakNotes?.[0]?.text || null)`), "notes in Chrome sync").catch(() => null);
+  check("The note goes to Chrome sync", synced === noted, synced ?? "");
+  await evaluate(frame, `window.api.saveSettings({ skipDuration: 10 })`);
+  await evaluate(frame, `window.api.reset()`);
+  const welcomeBack = await waitFor(() => evaluate(frame, `(t => /Welcome back/.test(t) ? t : null)(document.querySelector('.speech-bubble')?.innerText || '')`), "the welcome back note").catch(() => "");
+  check("Back from the break, the buddy shows the note", welcomeBack.includes("fixing the login bug, line 42"), welcomeBack.split("\n").slice(0, 3).join(" / "));
+  await clickInFrame(".speech-bubble .action-buttons .btn-primary");
+  check("\"Got it\" puts the note away", await waitFor(() => evaluate(frame, `window.api.getSettings().then(s => (s.breakNotes[0]?.seen && !/Welcome back/.test(document.querySelector('.speech-bubble')?.innerText || '')) || null)`), "the note dismissed").catch(() => false));
 
   // Upgrade from 1.0.0: old settings without the new fields, then a cold start of the worker
   // (the same startup path an update takes).

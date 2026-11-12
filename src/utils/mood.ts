@@ -33,6 +33,15 @@ export function buddyMood(data: StateMachineData, happy: boolean): Mood | null {
   return null;
 }
 
+/** What the buddy says when you click its mood badge: why it's there. */
+export function moodReason(mood: Mood, data: StateMachineData): string {
+  if (mood === 'call') return "🎧 You're on a call, so I'm holding your break and water reminders until it ends.";
+  if (mood === 'happy') return '✨ That was a proper break. I feel fresh. Hope you do too!';
+  if (data.state === 'SNOOZE') return "😪 We snoozed the break, so I'm getting sleepy. I'll ask again soon.";
+  if (data.skipsCount > 0) return `😪 We skipped ${data.skipsCount === 1 ? 'a break' : `${data.skipsCount} breaks`}, so I'm getting tired. A short one soon?`;
+  return `😪 That's ${Math.floor(data.activeWorkSeconds / 60)} minutes of focus in a row. A quick stretch would help us both.`;
+}
+
 /** A break you saw through to the end (not one cut short by getting back to work). */
 export function finishedBreak(previous: StateMachineData | null, next: StateMachineData): boolean {
   return previous?.state === 'BREAK' && next.state === 'WORKING' && previous.breakSecondsLeft <= 1;

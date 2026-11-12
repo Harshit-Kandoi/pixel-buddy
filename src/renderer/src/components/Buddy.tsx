@@ -18,6 +18,8 @@ interface BuddyProps {
   resting?: boolean;
   /** Shown as a small badge by the buddy's head; a tired buddy also looks a little dimmer. */
   mood?: Mood | null;
+  /** Clicking the badge: say why the buddy feels this way. */
+  onMoodClick?: () => void;
 }
 
 // ─── WebGL Shader Sources ────────────────────────────────────────────────────
@@ -160,6 +162,7 @@ export const Buddy: React.FC<BuddyProps> = ({
   onFileDrop,
   resting = false,
   mood = null,
+  onMoodClick,
 }) => {
   // Remember which source failed: switching file or keying mode clears the error by itself.
   const sourceKey = `${customVideoPath}|${keyingMode}|${debugKeyer}`;
@@ -429,9 +432,18 @@ export const Buddy: React.FC<BuddyProps> = ({
         renderFallback()
       )}
       {mood && (
-        <span key={mood} className={`buddy-mood buddy-mood-${mood}`} role="img" aria-label={MOOD_BADGES[mood].label} title={MOOD_BADGES[mood].label}>
+        <button
+          type="button"
+          key={mood}
+          className={`buddy-mood buddy-mood-${mood} non-draggable`}
+          aria-label={`${MOOD_BADGES[mood].label} Click to see why.`}
+          title={`${MOOD_BADGES[mood].label} Click to see why.`}
+          // Its own click, not the buddy's (which would say a random line or start a drag).
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={onMoodClick}
+        >
           {MOOD_BADGES[mood].emoji}
-        </span>
+        </button>
       )}
     </div>
   );

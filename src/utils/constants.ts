@@ -1,4 +1,5 @@
 import type { AvatarSkinSetting, FestivalSkin } from './seasons';
+import type { BreakNote } from './notes';
 
 export const APP_STATES = {
   WORKING: 'WORKING',
@@ -40,12 +41,14 @@ export const DEFAULT_SETTINGS = {
   hydrationLastResetDate: null as string | null,
   smartMonitoringEnabled: true,
   awayMinutes: 5, // no input this long = away (and being away this long counts as a break)
-  meetingAware: true, // hold break and water reminders while you're on a call
+  meetingAware: true,
+  showMoods: true, // 🎧 on a call, ✨ after a break, 😪 after a skipped one // hold break and water reminders while you're on a call
   statsFocusMinutesToday: 0,
   statsBreaksCompletedToday: 0,
   statsBreaksSkippedToday: 0,
   statsBreaksSnoozedToday: 0,
   lifetimeBreaksCompleted: 0,
+  breakNotes: [] as BreakNote[],
   reviewAskAt: 3,
 };
 
