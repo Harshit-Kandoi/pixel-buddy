@@ -4,8 +4,9 @@ import type { ActivityMonitor } from '../../src/main/activity';
 import { APP_STATES, DEFAULT_SETTINGS, awaySecondsFor } from '../../src/utils/constants';
 import { WEBSITE_URL } from '../../src/utils/links';
 import { fitForSync, mergeNotes } from '../../src/utils/notes';
+import { dailyReset, localDate } from '../../src/utils/history';
 import type { AppSettings, StateMachineData } from '../../src/utils/types';
-import { KEY_SETTINGS, PORT_PAGE, PORT_POPUP, type Call, type Push, type SchedulerAction } from './protocol';
+import { KEY_ENABLED, KEY_SETTINGS, PORT_PAGE, PORT_POPUP, type Call, type Push, type SchedulerAction } from './protocol';
 
 // The service worker owns the one scheduler every tab shares. It reuses the desktop timer
 // logic and swaps Electron's file settings and global input hooks for Chrome APIs.
@@ -52,16 +53,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 function checkDailyReset(): void {
-  const today = new Date().toLocaleDateString('en-CA');
-  if (settings.hydrationLastResetDate === today) return;
-  saveSettings({
-    hydrationDrankToday: 0,
-    statsFocusMinutesToday: 0,
-    statsBreaksCompletedToday: 0,
-    statsBreaksSkippedToday: 0,
-    statsBreaksSnoozedToday: 0,
-    hydrationLastResetDate: today,
-  });
+  const patch = dailyReset(settings, localDate(new Date()));
+  if (patch) saveSettings(patch);
 }
 
 const manager = {
@@ -96,7 +89,7 @@ const activity = {
 } as unknown as ActivityMonitor;
 
 function handleIdleState(state: `${chrome.idle.IdleState}`): void {
-  if (!settings.smartMonitoringEnabled) { idleSince = null; return; }
+  if (!enabled || !settings.smartMonitoringEnabled) { idleSince = null; return; }
   if (state === 'active') {
     if (idleSince === null) return;
     const awaySeconds = (Date.now() - idleSince) / 1000;
@@ -113,6 +106,9 @@ function handleIdleState(state: `${chrome.idle.IdleState}`): void {
 // ---- Scheduler ----
 
 let restoring = true; // swallow side effects while start-up rebuilds the saved state
+// The master switch (popup, or "Turn off Pixel Buddy" in settings). Off, the scheduler stops,
+// tabs remove the buddy, and nothing keeps the worker awake, so Chrome can put it to sleep.
+let enabled = true;
 let lastState: StateMachineData | null = null;
 const scheduler = new Scheduler(manager, activity, handleChange);
 const machine = (): ReturnType<Scheduler['getStateMachine']> => scheduler.getStateMachine();
@@ -165,15 +161,22 @@ function restore(saved: { data: StateMachineData; at: number } | undefined): voi
 }
 
 const ready = (async () => {
-  const [stored, session, idleState] = await Promise.all([
-    chrome.storage.local.get(KEY_SETTINGS),
+  const [stored, session] = await Promise.all([
+    chrome.storage.local.get([KEY_SETTINGS, KEY_ENABLED]),
     chrome.storage.session.get(KEY_MACHINE),
-    chrome.storage.local.get(KEY_SETTINGS).then(stored => chrome.idle.queryState(awaySecondsFor(stored[KEY_SETTINGS]?.awayMinutes))),
   ]);
   // Custom media and sounds live on disk in the desktop app; the extension uses the defaults.
   settings = { ...DEFAULT_SETTINGS, ...stored[KEY_SETTINGS], mediaLibrary: [], customVideoPath: null, customSoundPath: null };
+  enabled = stored[KEY_ENABLED] !== false;
   chrome.idle.setDetectionInterval(awaySeconds());
   pullNotesFromSync((await chrome.storage.sync.get(KEY_SYNC_NOTES).catch(() => ({})) as Record<string, unknown>)[KEY_SYNC_NOTES]);
+  if (!enabled) {
+    restoring = false;
+    lastState = machine().getData();
+    showOff();
+    return;
+  }
+  const idleState = await chrome.idle.queryState(awaySeconds());
   scheduler.start(handleTick);
   restore(session[KEY_MACHINE]);
   if (idleState !== 'active' && settings.smartMonitoringEnabled) idleSince = Date.now() - awaySeconds() * 1000;
@@ -181,12 +184,50 @@ const ready = (async () => {
   lastState = machine().getData();
   if (lastState.state === APP_STATES.IDLE && idleSince === null) machine().transitionTo(APP_STATES.WORKING);
   updateBadge(machine().getData());
+  keepAlive(true);
 })();
+
+// ---- On and off ----
+
+function showOff(): void {
+  badge = 'off';
+  void chrome.action.setBadgeText({ text: 'off' });
+  void chrome.action.setBadgeBackgroundColor({ color: '#64748b' });
+  void chrome.action.setTitle({ title: 'Pixel Buddy — Off. Click to turn it back on.' });
+}
+
+function setEnabled(on: boolean): void {
+  if (on === enabled) return;
+  enabled = on;
+  if (!on) {
+    scheduler.stop();
+    idleSince = null;
+    meetingTabs.clear();
+    void chrome.notifications.clear(NOTIFY_BREAK);
+    void chrome.notifications.clear(NOTIFY_WATER);
+    void chrome.storage.session.remove(KEY_MACHINE);
+    keepAlive(false);
+    showOff();
+    return;
+  }
+  // Back on: a fresh focus session, as if you just started the browser.
+  scheduler.setInMeeting(false);
+  scheduler.start(handleTick);
+  scheduler.handleReset();
+  keepAlive(true);
+  badge = '';
+  updateBadge(machine().getData());
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && KEY_ENABLED in changes) void ready.then(() => setEnabled(changes[KEY_ENABLED].newValue !== false));
+});
 
 // ---- Badge, sound, notifications ----
 
 let badge = '';
 function updateBadge(data: StateMachineData): void {
+  if (!enabled) return;
   const minutes = (seconds: number): string => `${Math.max(1, Math.ceil(seconds / 60))}m`;
   let text: string, color: string, title: string;
   if (data.isPaused) [text, color, title] = ['||', '#64748b', 'Reminders paused'];
@@ -265,6 +306,7 @@ function updateMeeting(): void {
 }
 
 function reportMeeting(tabId: number, active: boolean): void {
+  if (!enabled) return;
   if (active) meetingTabs.set(tabId, Date.now() + MEETING_TTL_MS);
   else meetingTabs.delete(tabId);
   updateMeeting();
@@ -317,8 +359,9 @@ function handleCall(message: Call): unknown {
       updateMeeting();
       return snapshot();
     }
-    case 'action': runAction(message.action); return null;
+    case 'action': if (enabled) runAction(message.action); return null;
     case 'input':
+      if (!enabled) return null;
       lastInputAt = Date.now();
       // Input in a tab is proof you're back, even before chrome.idle catches up.
       if (idleSince !== null) handleIdleState('active');
@@ -359,17 +402,21 @@ chrome.idle.onStateChanged.addListener(state => { void ready.then(() => handleId
 
 chrome.notifications.onButtonClicked.addListener((id, index) => {
   void ready.then(() => {
+    if (!enabled) return;
     if (id === NOTIFY_BREAK) runAction(index === 0 ? 'takeBreak' : 'snooze');
     if (id === NOTIFY_WATER) runAction(index === 0 ? 'logHydration' : 'snoozeHydration');
     void chrome.notifications.clear(id);
   });
 });
 
-// A periodic alarm restarts the worker if Chrome ever suspends it.
+// A periodic alarm restarts the worker if Chrome ever suspends it (only while it's on).
 chrome.alarms.onAlarm.addListener(() => { void ready; });
-void chrome.alarms.get('keepalive').then(alarm => {
-  if (!alarm) void chrome.alarms.create('keepalive', { periodInMinutes: 0.5 });
-});
+function keepAlive(on: boolean): void {
+  if (!on) { void chrome.alarms.clear('keepalive'); return; }
+  void chrome.alarms.get('keepalive').then(alarm => {
+    if (!alarm) void chrome.alarms.create('keepalive', { periodInMinutes: 0.5 });
+  });
+}
 
 // ---- Welcome and goodbye ----
 // First install: a one-page how-to. Uninstall: Chrome opens a one-question survey on the website.

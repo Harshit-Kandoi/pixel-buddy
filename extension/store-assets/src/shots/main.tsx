@@ -12,11 +12,11 @@ import { avatarSrc } from '../../../../src/renderer/src/avatars';
 import { CLAIM_BREAKS, upcomingFestivals } from '../../../../src/utils/seasons';
 
 const SCENES: Record<string, { title: string; text: string }> = {
-  guided: { title: 'Breaks you actually take 🙆', text: 'Your buddy leads a short stretch, an eye refresh or a breathing break, and does it with you.' },
-  festive: { title: 'Limited-time festival buddies 🎁', text: 'Take 3 breaks during a festival to keep its buddy. Miss it and it’s gone till next year.' },
-  reminder: { title: 'Gentle break reminders', text: 'Pomodoro, Balanced, Deep focus or your own timings. Take a break, snooze or skip.' },
-  share: { title: 'Share your little wins 📸', text: "Turn today's focus time, breaks and water into a picture for LinkedIn or friends." },
-  water: { title: 'Water reminders, private by design 💧', text: 'A daily water goal. No account, no tracking: everything stays in your browser.' },
+  guided: { title: 'Breaks you actually take 🙆', text: 'Your buddy leads a stretch, an eye refresh or a breathing break step by step, and does it right along with you.' },
+  festive: { title: 'Limited-time festival buddies 🎁', text: 'Take 3 breaks during a festival to keep its one-of-a-kind buddy forever. Miss it, and it’s gone till next year.' },
+  reminder: { title: 'Pick up where you left off 📝', text: 'Gentle reminders on your timings. Jot what you were doing, and your buddy reminds you when you’re back.' },
+  share: { title: 'Share your little wins 📸', text: "Turn today's focus time, breaks and glasses of water into a picture to post on LinkedIn, X or send to friends." },
+  water: { title: 'Water reminders, private by design 💧', text: 'Gentle sips toward a daily goal, logged in one tap. No account, no tracking: everything stays in your browser.' },
 };
 
 const scene = new URLSearchParams(location.search).get('scene') ?? 'guided';
@@ -53,7 +53,15 @@ async function setUp(): Promise<void> {
     document.querySelector('.page')!.appendChild(lineup);
     preview.focus();
   } else if (scene === 'reminder') {
+    // The break reminder with a note typed in (React only sees a value set the way typing does).
     preview.reminder();
+    await wait(400);
+    const note = document.querySelector<HTMLInputElement>('.break-note-input');
+    if (note) {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(note, 'Fixing the login bug, line 42');
+      note.dispatchEvent(new Event('input', { bubbles: true }));
+      note.focus();
+    }
   } else if (scene === 'water') {
     preview.water();
   } else if (scene === 'share') {

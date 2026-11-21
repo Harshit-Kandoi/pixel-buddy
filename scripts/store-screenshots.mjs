@@ -2,6 +2,7 @@
 // the real app UI on the invented demo page, with a caption band. Drives headless Chrome
 // over the DevTools protocol and captures each scene once it reports it is ready.
 // Usage: npm run ext:screenshots   (Node 22+; set CHROME_PATH if Chrome is elsewhere)
+//        npm run ext:screenshots -- reminder   (only the named scenes)
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Node runs this plain JavaScript directly. */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -82,7 +83,8 @@ try {
   );
   const page = await connect(target.webSocketDebuggerUrl);
   await page.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
-  for (const [scene, file] of scenes) {
+  const only = process.argv.slice(2);
+  for (const [scene, file] of scenes.filter(([name]) => !only.length || only.includes(name))) {
     await page.send("Page.navigate", { url: `${SCENE_URL}?scene=${scene}` });
     await waitFor(
       () => page.send("Runtime.evaluate", { expression: "document.title" }).then((r) => r.result.value === "ready"),

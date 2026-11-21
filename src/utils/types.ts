@@ -1,6 +1,7 @@
 import { AppState } from './constants';
 import type { AvatarSkinSetting, FestivalSkin } from './seasons';
 import type { BreakNote } from './notes';
+import type { DayStats } from './history';
 
 export interface AppSettings {
   workDuration: number;
@@ -48,6 +49,12 @@ export interface AppSettings {
   breakNotes: BreakNote[];
   /** Ask for a rating once this many breaks are done; -1 means never ask again. */
   reviewAskAt: number;
+  /** Stars picked in the feedback card (1–5), or 0 before you've rated. */
+  feedbackRating: number;
+  /** When feedback was last sent (ms since epoch), or null. */
+  feedbackSentAt: number | null;
+  /** Finished days' counters, oldest first (see history.ts). */
+  history: DayStats[];
 }
 
 // Where the buddy sits in its window (window coordinates) at the end of a drag, now and

@@ -1,5 +1,6 @@
 import type { AvatarSkinSetting, FestivalSkin } from './seasons';
 import type { BreakNote } from './notes';
+import type { DayStats } from './history';
 
 export const APP_STATES = {
   WORKING: 'WORKING',
@@ -50,6 +51,9 @@ export const DEFAULT_SETTINGS = {
   lifetimeBreaksCompleted: 0,
   breakNotes: [] as BreakNote[],
   reviewAskAt: 3,
+  feedbackRating: 0,
+  feedbackSentAt: null as number | null,
+  history: [] as DayStats[],
 };
 
 export const ACTIVITY_WEIGHTS = {

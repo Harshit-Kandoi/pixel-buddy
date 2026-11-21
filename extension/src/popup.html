@@ -5,10 +5,28 @@
     <title>Pixel Buddy</title>
   </head>
   <body>
-    <label class="popup-bar">
-      <span>Show on pages</span>
-      <input id="pages-enabled" type="checkbox" role="switch" checked />
-    </label>
+    <div class="popup-bar" id="popup-bar">
+      <div class="popup-row">
+        <div class="popup-row-text">
+          <span class="popup-title">Pixel Buddy</span>
+          <span class="popup-status" id="enabled-status">On</span>
+        </div>
+        <label class="switch" title="Turn Pixel Buddy on or off">
+          <input id="enabled" type="checkbox" role="switch" aria-label="Pixel Buddy on" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="popup-row popup-subrow" id="sub-row">
+        <label class="popup-check" title="Show the buddy in the corner of your tabs. Reminders still come as notifications when it's hidden.">
+          <input id="pages-enabled" type="checkbox" role="switch" checked />
+          <span>Show in tabs</span>
+        </label>
+        <label class="popup-check" id="site-toggle" hidden>
+          <input id="site-enabled" type="checkbox" role="switch" checked />
+          <span>On <b id="site-name"></b></span>
+        </label>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="./popup.tsx"></script>
   </body>

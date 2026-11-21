@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedback · Pixel Buddy</title>
+<meta name="description" content="Tell the developer what you like about Pixel Buddy and what could be better.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/buddy.svg"><link rel="stylesheet" href="style.css">
+<style>
+.fb{max-width:620px;padding-block:56px 80px}.fb h1{font-size:40px;line-height:1.1;letter-spacing:-1.2px;margin:12px 0 8px}
+.fb p{font-size:15px;color:var(--ink)}.fb .muted{color:var(--muted);font-size:13px}
+.fb form{display:grid;gap:12px;margin-top:24px}
+.fb fieldset{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}
+.fb legend{font-weight:700;margin-bottom:8px;width:100%}
+.fb .stars{gap:4px}.fb .stars label{font-size:34px;line-height:1;color:#cbd5e1;cursor:pointer}
+.fb .stars input{position:absolute;opacity:0;pointer-events:none}
+.fb .stars label.on{color:#f59e0b}.fb .stars input:focus-visible+span{outline:2px solid currentColor;outline-offset:2px;border-radius:4px}
+.fb label.chip{display:inline-flex;gap:6px;align-items:center;padding:7px 12px;border:1px solid rgba(0,0,0,.14);border-radius:999px;cursor:pointer;background:#fff;font-size:14px}
+.fb label.chip:has(input:checked){border-color:currentColor;box-shadow:0 0 0 1px currentColor}
+.fb textarea,.fb input[type=email]{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(0,0,0,.15);font:inherit;box-sizing:border-box}
+.fb textarea{min-height:96px;resize:vertical}
+.fb .hidden{display:none}.fb a{text-decoration:underline}
+.fb .thanks{padding:20px;border-radius:14px;background:rgba(34,160,107,.1);border:1px solid rgba(34,160,107,.3)}
+</style>
+</head>
+<body>
+<header class="nav wrap"><a class="brand" href="index.html" aria-label="Pixel Buddy home"><img src="assets/buddy.svg" alt="" width="38" height="40">pixel buddy<span class="brand-dot">.</span></a><a class="button small" href="index.html#download">Get your buddy <span>↗</span></a></header>
+<main class="fb wrap">
+<span class="eyebrow">TELL ME HOW IT'S GOING</span>
+<h1>Your feedback.</h1>
+<p>What you like, what bugs you, what you wish it did. It goes straight to the developer, and every note gets read.</p>
+
+<!-- Netlify Forms collects the answers (Site configuration → Forms → feedback). The app and the
+     extension post the same fields here when you press Send in their feedback card. -->
+<form id="feedback" name="feedback" method="POST" data-netlify="true" netlify-honeypot="company" action="feedback.html?sent=1">
+<input type="hidden" name="form-name" value="feedback">
+<input type="hidden" name="platform" id="platform">
+<input type="hidden" name="version" id="version">
+<input type="hidden" name="liked" id="liked">
+<input type="hidden" name="improve" id="improve">
+<p class="hidden"><label>Leave this empty <input name="company"></label></p>
+<fieldset class="stars" id="stars">
+<legend>How's Pixel Buddy for you?</legend>
+<label title="Not for me"><input type="radio" name="rating" value="1" required><span>★</span></label>
+<label title="Needs work"><input type="radio" name="rating" value="2"><span>★</span></label>
+<label title="It's okay"><input type="radio" name="rating" value="3"><span>★</span></label>
+<label title="I like it"><input type="radio" name="rating" value="4"><span>★</span></label>
+<label title="I love it"><input type="radio" name="rating" value="5"><span>★</span></label>
+</fieldset>
+<fieldset id="liked-options">
+<legend>What do you like?</legend>
+<label class="chip"><input type="checkbox" value="Break reminders"> Break reminders</label>
+<label class="chip"><input type="checkbox" value="Guided breaks"> Guided breaks</label>
+<label class="chip"><input type="checkbox" value="Water reminders"> Water reminders</label>
+<label class="chip"><input type="checkbox" value="The buddy"> The buddy</label>
+<label class="chip"><input type="checkbox" value="Festival buddies"> Festival buddies</label>
+<label class="chip"><input type="checkbox" value="Dashboard"> Dashboard</label>
+<label class="chip"><input type="checkbox" value="Break notes"> Break notes</label>
+<label class="chip"><input type="checkbox" value="Quiet during calls"> Quiet during calls</label>
+</fieldset>
+<fieldset id="improve-options">
+<legend>What could be better?</legend>
+<label class="chip"><input type="checkbox" value="Reminders at bad times"> Reminders at bad times</label>
+<label class="chip"><input type="checkbox" value="Gets in the way"> Gets in the way</label>
+<label class="chip"><input type="checkbox" value="Battery or heat"> Battery or heat</label>
+<label class="chip"><input type="checkbox" value="Hard to set up"> Hard to set up</label>
+<label class="chip"><input type="checkbox" value="Missing a feature"> Missing a feature</label>
+<label class="chip"><input type="checkbox" value="Something broke"> Something broke</label>
+</fieldset>
+<label for="message" class="muted">Anything else? (optional)</label>
+<textarea id="message" name="message" maxlength="1000" placeholder="Ideas, bugs, wishes…"></textarea>
+<label for="email" class="muted">Email, only if you'd like a reply (optional)</label>
+<input type="email" id="email" name="email" maxlength="120" autocomplete="email">
+<button class="button" type="submit">Send</button>
+<p class="muted">Sends what you pick or write, and which app and version you use. Nothing else. <a href="privacy.html#feedback">Privacy</a></p>
+</form>
+
+<div id="thanks" class="thanks hidden" role="status">
+<p><strong>Thank you!</strong> Your feedback was sent. 💚</p>
+<p class="muted">Enjoying the buddy? A <a href="https://chromewebstore.google.com/detail/pixel-buddy/ikggibbkgbebflafmlaihlmdpibpdggc/reviews">review on the Chrome Web Store</a> or a <a href="https://github.com/Harshit-Kandoi/pixel-buddy">star on GitHub</a> helps other people find it.</p>
+</div>
+</main>
+<footer class="wrap"><a class="brand" href="index.html">pixel buddy.</a><span>Made for a little more balance. Free to share.</span><a href="https://github.com/Harshit-Kandoi/pixel-buddy">Made by Harshit Kandoi ↗</a></footer>
+<script>
+// The app opens this page with ?rating=<stars>&p=<platform>&v=<version> when it can't send by itself.
+const params = new URLSearchParams(location.search);
+document.getElementById('platform').value = (params.get('p') || 'website').slice(0, 20);
+document.getElementById('version').value = (params.get('v') || '').slice(0, 20);
+const form = document.getElementById('feedback');
+const thanks = document.getElementById('thanks');
+const starLabels = [...document.querySelectorAll('#stars label')];
+const paintStars = () => {
+  const picked = Number(form.querySelector('input[name=rating]:checked')?.value || 0);
+  starLabels.forEach((label, i) => label.classList.toggle('on', i < picked));
+};
+const preset = form.querySelector(`input[name=rating][value="${Number(params.get('rating'))}"]`);
+if (preset) preset.checked = true;
+paintStars();
+form.addEventListener('change', paintStars);
+const picked = (id) => [...document.querySelectorAll(`#${id} input:checked`)].map((input) => input.value).join(', ');
+const done = () => { form.classList.add('hidden'); thanks.classList.remove('hidden'); };
+if (params.has('sent')) done();
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  document.getElementById('liked').value = picked('liked-options');
+  document.getElementById('improve').value = picked('improve-options');
+  try {
+    const response = await fetch('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(new FormData(form)).toString(),
+    });
+    if (!response.ok) throw new Error(String(response.status));
+    done();
+  } catch {
+    // Not served by Netlify (e.g. a local preview): say so instead of pretending it was sent.
+    thanks.innerHTML = '<p><strong>Thanks!</strong> This copy of the site can\'t receive answers. You can <a href="https://github.com/Harshit-Kandoi/pixel-buddy/issues">tell us on GitHub</a> instead.</p>';
+    done();
+  }
+});
+</script>
+</body>
+</html>

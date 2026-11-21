@@ -1719,3 +1719,69 @@ html.buddy-left .buddy-mood { right: auto; left: 4px; }
 
 .permission-hint { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #fde68a; }
 .permission-hint b { color: #fef3c7; }
+
+/* Right now: live timers and everyday actions at the top of Settings. */
+.now-card { margin: -6px 0 14px; padding: 10px 12px; border-radius: 14px; background: #1f342d; border: 1px solid #3a5147; flex-shrink: 0; }
+.now-line { display: flex; align-items: baseline; gap: 7px; font-size: 12px; color: #dce8df; }
+.now-icon { font-size: 13px; }
+.now-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-time { font-size: 17px; font-weight: 700; color: #f1f8f2; font-variant-numeric: tabular-nums; }
+.now-progress { height: 4px; margin: 8px 0 9px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.now-progress div { height: 100%; border-radius: 2px; background: var(--theme-primary); transition: width 0.6s ease; }
+.now-card.paused .now-progress div, .now-idle .now-progress div { background: #64748b; }
+.now-break .now-progress div { background: #10b981; }
+.now-popup { border-color: #f59e0b88; }
+.now-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.now-actions .btn { padding: 5px 9px; font-size: 11px; }
+.now-actions .now-water { margin-left: auto; }
+
+/* Feedback card */
+.feedback-card { margin-top: 16px; }
+.feedback-question { margin: 2px 0 6px; font-size: 12px; color: #dce8df; }
+.feedback-stars { display: flex; align-items: center; gap: 2px; }
+.feedback-star, .bubble-star { background: none; border: 0; padding: 0 2px; font-size: 24px; line-height: 1; color: #4b5f55; cursor: pointer; transition: color 0.12s, transform 0.12s; }
+.feedback-star.filled { color: #fbbf24; }
+.feedback-star:hover, .bubble-star:hover { transform: scale(1.15); }
+.feedback-star:focus-visible, .bubble-star:focus-visible { outline: 2px solid var(--theme-primary); outline-offset: 2px; border-radius: 4px; }
+.feedback-star-word { margin-left: 8px; font-size: 11px; color: #a8bcaf; }
+.feedback-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.feedback-review { padding: 10px; border-radius: 12px; background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.25); }
+.feedback-review p { margin: 0 0 8px; font-size: 11px; line-height: 1.5; color: #e7dcc0; }
+.feedback-label { margin: 4px 0 0; font-size: 11px; font-weight: 600; color: #cfe0d4; }
+.feedback-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.feedback-chip { padding: 4px 9px; border-radius: 999px; font: inherit; font-size: 11px; color: #c6d6cb; background: #233a30; border: 1px solid #415648; cursor: pointer; }
+.feedback-chip.on { color: #fff; border-color: var(--theme-primary); background: hsla(var(--theme-hue), 60%, 55%, 0.25); }
+.feedback-chip.bad.on { border-color: #f59e0b; background: rgba(245, 158, 11, 0.18); }
+.feedback-text { width: 100%; box-sizing: border-box; min-height: 64px; padding: 8px 10px; border-radius: 10px; border: 1px solid #415648; background: rgba(0, 0, 0, 0.18); color: #f1f5f9; font: inherit; font-size: 12px; resize: vertical; user-select: text; }
+.feedback-text:focus { outline: none; border-color: var(--theme-primary); }
+.feedback-email { width: 100%; box-sizing: border-box; user-select: text; }
+.feedback-send { align-self: flex-start; }
+.feedback-privacy, .feedback-error { margin: 0; font-size: 10px; line-height: 1.5; color: #93a89b; }
+.feedback-error { color: #fca5a5; }
+.feedback-link { background: none; border: 0; padding: 0; font: inherit; color: var(--theme-primary); text-decoration: underline; cursor: pointer; }
+.feedback-thanks { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; font-size: 12px; color: #dce8df; }
+.feedback-thanks p { margin: 0; line-height: 1.5; }
+
+/* "How am I doing?" stars in the buddy's bubble */
+.bubble-stars { display: flex; justify-content: center; gap: 2px; margin-top: 8px; }
+.bubble-star { font-size: 26px; color: #fbbf24; opacity: 0.55; }
+.bubble-stars:hover .bubble-star { opacity: 1; }
+.bubble-stars .bubble-star:hover ~ .bubble-star { opacity: 0.35; color: #94a3b8; }
+
+/* Dashboard: this week's focus and the break streak */
+.week-card { margin-top: 10px; }
+.week-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.week-header .stat-card-title { margin-bottom: 0; }
+.streak-pill { font-size: 11px; font-weight: 600; color: #fde68a; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.28); border-radius: 999px; padding: 2px 9px; white-space: nowrap; cursor: default; }
+.streak-pill.none { color: #a8bcaf; background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.1); font-weight: 500; }
+.week-detail { margin: 8px 0 6px; min-height: 16px; font-size: 11px; color: #cfe0d4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; height: 86px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 0; }
+.week-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; background: none; border: 0; border-radius: 6px; cursor: default; font: inherit; min-width: 0; }
+.week-day:focus-visible { outline: 2px solid var(--theme-primary); outline-offset: 1px; }
+.week-bar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; border-radius: 6px; transition: background 0.15s; }
+.week-day.active .week-bar-track { background: rgba(255, 255, 255, 0.05); }
+.week-bar { width: 60%; max-width: 18px; border-radius: 4px 4px 0 0; background: var(--theme-primary); opacity: 0.85; transition: opacity 0.15s; }
+.week-day.active .week-bar, .week-day.today .week-bar { opacity: 1; }
+.week-label { font-size: 10px; color: #93a89b; line-height: 1; padding-bottom: 4px; }
+.week-day.today .week-label { color: #e2eade; font-weight: 600; }
+.week-best { margin-top: 6px; font-size: 10px; color: #93a89b; }

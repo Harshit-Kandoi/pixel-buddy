@@ -1,7 +1,8 @@
 // End-to-end dry run of the built Chrome extension in a throwaway headless Chrome profile:
 // install, buddy on a real web page, guided break, settings and festival calendar, water
-// logging, share card, rating prompt, a real one-minute break, the toolbar popup, and an
-// upgrade from 1.0.0 settings. Uses real mouse clicks through the click-through overlay.
+// logging, share card, rating prompt and feedback card, a real one-minute break, the toolbar
+// popup, daily history, hiding on one site, the on/off switch, and an upgrade from 1.0.0 settings. Uses real
+// mouse clicks through the click-through overlay.
 //
 // Usage: npm run ext:test            (builds first; about 90 seconds)
 //        npm run ext:test -- --quick  (skips waiting for a real one-minute break)
@@ -254,20 +255,29 @@ try {
   else check("Copy image works inside a web page", /Copied/.test(copied), copied);
   await evaluate(frame, `document.querySelector('[aria-label="Close settings"]').click()`);
 
-  // Rating prompt
+  // Rating prompt: "How am I doing?" with stars; a star opens the feedback card in settings.
   await evaluate(frame, `window.api.saveSettings({ lifetimeBreaksCompleted: 3 })`);
   const ask = await waitFor(() => evaluate(frame, `(document.querySelector('.speech-bubble')?.innerText ?? '').includes('breaks together') && document.querySelector('.speech-bubble').innerText`), "the rating prompt");
-  check("Rating prompt appears after 3 breaks", /Rate ⭐/.test(ask), ask.split("\n")[0]);
+  check("Rating prompt asks for stars after 3 breaks", /How am I doing/.test(ask) && (await evaluate(frame, `document.querySelectorAll('.bubble-star').length`)) === 5, ask.split("\n")[0]);
   await evaluate(frame, `[...document.querySelectorAll('.speech-bubble button')].find(b => b.textContent === 'Later').click()`);
   check('"Later" asks again 10 breaks later', await waitFor(() => evaluate(frame, `window.api.getSettings().then(s => s.reviewAskAt === 13)`), "Later").catch(() => false));
   await evaluate(frame, `window.api.saveSettings({ lifetimeBreaksCompleted: 13 })`);
-  await waitFor(() => evaluate(frame, `!!document.querySelector('.speech-bubble button')`), "the prompt again");
+  await waitFor(() => evaluate(frame, `!!document.querySelector('.bubble-star')`), "the prompt again");
+  await clickInFrame(".bubble-star:nth-child(5)");
+  const stars = await waitFor(() => evaluate(frame, `!!document.querySelector('#feedback .feedback-review') && document.querySelectorAll('#feedback .feedback-star.filled').length`), "the feedback card").catch(() => 0);
+  check("Tapping a star opens the feedback card with that rating", stars === 5, `${stars} stars`);
+  check("Rating prompt never asks again after a star", (await evaluate(frame, `window.api.getSettings().then(s => s.reviewAskAt === -1 && s.feedbackRating === 5)`)) === true);
   const before = new Set((await targets()).map((t) => t.targetId));
-  await evaluate(frame, `[...document.querySelectorAll('.speech-bubble button')].find(b => b.textContent.includes('Rate')).click()`, true);
+  await evaluate(frame, `document.querySelector('#feedback .feedback-review .btn-primary').click()`, true);
   const opened = await findTarget((t) => !before.has(t.targetId) && t.type === "page", "the reviews tab").catch(() => null);
-  check('"Rate" opens the Chrome Web Store reviews page', opened && /chromewebstore\.google\.com\/detail\/pixel-buddy\/[a-z]+\/reviews/.test(opened.url), opened?.url);
+  check('"Rate on the Chrome Web Store" opens the reviews page', opened && /chromewebstore\.google\.com\/detail\/pixel-buddy\/[a-z]+\/reviews/.test(opened.url), opened?.url);
   if (opened) await send("Target.closeTarget", { targetId: opened.targetId });
-  check("Rating prompt never asks again after rating", (await evaluate(frame, `window.api.getSettings().then(s => s.reviewAskAt)`)) === -1);
+  await send("Target.activateTarget", { targetId: pageId });
+  await evaluate(frame, `document.querySelectorAll('#feedback .feedback-star')[1].click()`);
+  const low = await waitFor(() => evaluate(frame, `(() => { const card = document.querySelector('#feedback'); return !card.querySelector('.feedback-review') && !!card.querySelector('.feedback-text') && card.innerText; })()`), "the low-rating form").catch(() => "");
+  check("A low rating asks what could be better, and still offers a public review", /What could be better/.test(low) && /Write a review/.test(low));
+  check("Settings shows the live timer at the top", /Next break in/.test(await evaluate(frame, `document.querySelector('.now-card')?.innerText ?? ''`)));
+  await evaluate(frame, `document.querySelector('[aria-label="Close settings"]').click()`);
 
   // Using Pixel Buddy during a break (here: clicking around settings in the toolbar popup)
   // must not end the break; steady input in the page afterwards (back to work) does.
@@ -341,6 +351,12 @@ try {
   await evaluate(frame, `window.api.saveSettings({ awayMinutes: 2 })`);
   check("Away time can be changed", await waitFor(() => evaluate(worker, `chrome.storage.local.get('settings').then(s => s.settings.awayMinutes === 2 || null)`), "away time").catch(() => false));
 
+  // Daily history: a new day files yesterday's counters (they feed the week chart and streak).
+  const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("en-CA");
+  await evaluate(frame, `window.api.saveSettings({ hydrationLastResetDate: '${yesterday}', statsFocusMinutesToday: 90, statsBreaksCompletedToday: 2 })`);
+  const filed = await evaluate(frame, `window.api.getSettings().then(s => ({ breaks: s.history.find(d => d.date === '${yesterday}')?.breaks, today: s.statsBreaksCompletedToday }))`);
+  check("A new day files yesterday into history and starts today at zero", filed.breaks === 2 && filed.today === 0, JSON.stringify(filed));
+
   // Break notes: jot what you're doing at the reminder, see it when you're back.
   await send("Target.activateTarget", { targetId: pageId });
   await evaluate(frame, `window.api.reset()`);
@@ -363,10 +379,40 @@ try {
   await clickInFrame(".speech-bubble .action-buttons .btn-primary");
   check("\"Got it\" puts the note away", await waitFor(() => evaluate(frame, `window.api.getSettings().then(s => (s.breakNotes[0]?.seen && !/Welcome back/.test(document.querySelector('.speech-bubble')?.innerText || '')) || null)`), "the note dismissed").catch(() => false));
 
+  // Hide on one site: the buddy leaves that site's tabs and comes back when it's allowed again.
+  await send("Target.activateTarget", { targetId: pageId });
+  const frameShown = `!!document.querySelector('iframe[title="Pixel Buddy"]')`;
+  await evaluate(worker, `chrome.storage.local.set({ hiddenSites: ['127.0.0.1'] })`);
+  check("Hiding the buddy on a site removes it there", await waitFor(() => evaluate(page, `!${frameShown} || null`), "the frame to go").catch(() => false));
+  await evaluate(worker, `chrome.storage.local.set({ hiddenSites: [] })`);
+  check("Showing it on the site again brings it back", await waitFor(() => evaluate(page, `${frameShown} || null`), "the frame to return").catch(() => false));
+
+  // The master switch: off stops the timer and reminders and removes the buddy; on starts fresh.
+  const { targetId: switchPopupId } = await send("Target.createTarget", { url: `${origin}/popup.html` });
+  const switchPopup = await attach(switchPopupId);
+  await waitFor(() => evaluate(switchPopup, `!!document.querySelector('.settings-panel')`), "the popup");
+  await evaluate(switchPopup, `document.getElementById('enabled').click()`, true);
+  check("Turning Pixel Buddy off shows the off card", await waitFor(() => evaluate(switchPopup, `!!document.querySelector('.popup-off') || null`), "the off card").catch(() => false));
+  check("Turning it off removes the buddy from tabs", await waitFor(() => evaluate(page, `!${frameShown} || null`), "the frame to go").catch(() => false));
+  const offBadge = await waitFor(() => evaluate(worker, `chrome.action.getBadgeText({}).then(t => t === 'off' && t)`), "the off badge").catch(() => "");
+  check("Toolbar badge says off", offBadge === "off", offBadge);
+  const keepalive = await evaluate(worker, `chrome.alarms.get('keepalive').then(a => !!a)`);
+  const ticksBefore = await evaluate(worker, `chrome.storage.session.get('machine').then(s => s.machine?.at ?? 0)`);
+  await delay(2500);
+  const ticksAfter = await evaluate(worker, `chrome.storage.session.get('machine').then(s => s.machine?.at ?? 0)`);
+  check("Nothing runs while off (no timer, no keep-alive)", ticksAfter === ticksBefore && !keepalive, `keepalive ${keepalive}`);
+  await evaluate(switchPopup, `document.querySelector('.popup-off .btn-primary').click()`, true);
+  check("Turning it back on brings the buddy back", await waitFor(() => evaluate(page, `${frameShown} || null`), "the frame to return").catch(() => false));
+  const onState = await waitFor(() => Promise.all([evaluate(worker, `chrome.action.getBadgeText({})`), evaluate(worker, `chrome.alarms.get('keepalive').then(a => !!a)`)]).then(([text, alarm]) => /^\d+m$/.test(text) && alarm && text), "the timer to restart").catch(() => "");
+  check("Back on, the timer runs again", !!onState, onState);
+  await send("Target.closeTarget", { targetId: switchPopupId });
+
   // Upgrade from 1.0.0: old settings without the new fields, then a cold start of the worker
   // (the same startup path an update takes).
   await evaluate(worker, `chrome.storage.local.set({ settings: { workDuration: 25, breakDuration: 5, snoozeDuration: 30, sound: true, userName: 'Old user', hydrationGoal: 6, themeHue: 200 } })`);
   for (const t of (await targets()).filter((t) => t.type === "page" && (t.url.startsWith(origin) || t.targetId === pageId))) await send("Target.closeTarget", { targetId: t.targetId });
+  // The offscreen audio page (left open by the reminder chime) keeps the worker alive; close it too.
+  await evaluate(worker, `chrome.offscreen.closeDocument().catch(() => {})`).catch(() => {});
   const workerTarget = (await targets()).find((t) => t.type === "service_worker" && t.url.startsWith(origin));
   await send("Target.closeTarget", { targetId: workerTarget.targetId }).catch(() => {});
   await waitFor(async () => !(await targets()).some((t) => t.type === "service_worker" && t.url.startsWith(origin)), "the worker to stop", 15000);

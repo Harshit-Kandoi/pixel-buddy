@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectMeeting, micInUseFromRegistry } from '../meetings';
+import { detectMeeting, micInUseFromHelper, micInUseFromRegistry } from '../meetings';
 
 const KEY = 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone';
 
@@ -10,6 +10,18 @@ describe('call detection', () => {
     expect(micInUseFromRegistry(idle)).toBe(false);
     expect(micInUseFromRegistry(inUse)).toBe(true);
     expect(micInUseFromRegistry('')).toBe(false);
+  });
+
+  it("reads the macOS helper's answer, and treats anything else as unknown", () => {
+    expect(micInUseFromHelper('1\n')).toBe(true);
+    expect(micInUseFromHelper('0\n')).toBe(false);
+    expect(micInUseFromHelper('')).toBeNull();
+    expect(micInUseFromHelper('Killed: 9')).toBeNull();
+  });
+
+  it('falls back to the Zoom check on macOS when the helper is missing', async () => {
+    if (process.platform !== 'darwin') return;
+    expect(typeof (await detectMeeting('darwin', '/nonexistent/mic-in-use'))).toBe('boolean');
   });
 
   it('never reports a call on platforms it cannot check', async () => {
