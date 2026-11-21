@@ -10,7 +10,6 @@ import { CLAIM_BREAKS, claimStatus, resolveAvatarSkin } from '../../utils/season
 import { avatarSrc } from './avatars';
 import { isImageFile } from '../../utils/mediaFormats';
 import { routineForBreak, stepAt } from '../../utils/breakRoutines';
-import { CHROME_REVIEW_URL, EDGE_ADDONS_URL, GITHUB_URL } from '../../utils/links';
 import { HAPPY_FOR_MS, TIRED_LINES, buddyMood, finishedBreak, moodReason } from '../../utils/mood';
 import { NOTE_MAX_LENGTH, addNote, markSeen, pendingNote } from '../../utils/notes';
 
@@ -25,10 +24,6 @@ const BOB_MS = 2400;
 // animate, about 3× the CPU of the float alone. They play for a few seconds whenever the buddy
 // wakes, then hold still while it keeps floating.
 const FESTIVE_ANIMATION_MS = 6000;
-const IS_EDGE = /\bEdg\//.test(navigator.userAgent);
-// Where "Rate" goes: the store this copy most likely came from (Edge users can install from the
-// Chrome Web Store until the Edge listing exists); the desktop app asks for a GitHub star instead.
-const STORE_REVIEW_URL = !IN_EXTENSION ? '' : IS_EDGE && EDGE_ADDONS_URL ? EDGE_ADDONS_URL : CHROME_REVIEW_URL;
 import { playChime, playWorriedBeep } from '../../utils/sounds';
 import { toMediaUrl } from '../../utils/mediaUrl';
 
@@ -78,6 +73,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const lastLivelyRef = useRef(0); // set by the wake effect on mount
   const [festiveAnimating, setFestiveAnimating] = useState(true);
   const festiveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [feedbackStars, setFeedbackStars] = useState(0); // stars tapped in the buddy's "How am I doing?"
   const [noteDraft, setNoteDraft] = useState(''); // "what were you doing?" at the break reminder
   const [happy, setHappy] = useState(false); // a minute of good mood after a finished break
   const happyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -117,11 +113,17 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   // Report the on-screen rects of visible UI to the main process; everything else in the
   // (fixed-size, transparent) window stays click-through.
   useEffect(() => {
+    // Snapped outward to an 8px grid with a little padding, so the buddy's gentle float doesn't
+    // send a new set ten times a second. Nothing to report from a tab you can't see.
     let last = '';
+    const GRID = 8;
     const report = (): void => {
+      if (document.hidden) return;
       const rects = Array.from(document.querySelectorAll<HTMLElement>(HIT_SELECTOR)).map((el) => {
         const r = el.getBoundingClientRect();
-        return { x: Math.floor(r.left) - 4, y: Math.floor(r.top) - 4, width: Math.ceil(r.width) + 8, height: Math.ceil(r.height) + 8 };
+        const x = Math.floor((r.left - 4) / GRID) * GRID;
+        const y = Math.floor((r.top - 4) / GRID) * GRID;
+        return { x, y, width: Math.ceil((r.right + 4) / GRID) * GRID - x, height: Math.ceil((r.bottom + 4) / GRID) * GRID - y };
       });
       const key = JSON.stringify(rects);
       if (key !== last) {
@@ -506,12 +508,18 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
     window.api.takeBreak();
   };
 
-  // Asked once, in a calm moment after a few completed breaks.
+  // "How am I doing?", asked once in a calm moment after a few completed breaks. Tapping a star
+  // opens the feedback card in Settings with those stars picked.
   const showReviewAsk =
     stateData.state === 'WORKING' && !clickedDialogue && !showHydrationReminder && !returnNote && !showClaim && !showBatteryTip &&
     settings.reviewAskAt >= 0 && (settings.lifetimeBreaksCompleted ?? 0) >= settings.reviewAskAt;
-  const answerReviewAsk = (answer: 'yes' | 'later' | 'never'): void => {
-    if (answer === 'yes') window.open(STORE_REVIEW_URL || GITHUB_URL, '_blank', 'noopener');
+  const answerReviewAsk = (answer: number | 'later' | 'never'): void => {
+    if (typeof answer === 'number') {
+      setFeedbackStars(answer);
+      handleSaveSettings({ reviewAskAt: -1, feedbackRating: answer });
+      openSettings();
+      return;
+    }
     handleSaveSettings({ reviewAskAt: answer === 'later' ? (settings.lifetimeBreaksCompleted ?? 0) + 10 : -1 });
   };
 
@@ -535,8 +543,10 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
         <Settings 
           settings={settings} 
           onSave={handleSaveSettings} 
-          onClose={() => setShowSettings(false)}
+          onClose={() => { setShowSettings(false); setFeedbackStars(0); }}
           onHeaderMouseDown={handleMouseDown}
+          stateData={stateData}
+          feedbackRating={feedbackStars}
         />
       ) : (
         <>
@@ -559,7 +569,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                   : showClaim && claim
                     ? `You earned the ${claim.festival.festival.name} buddy! ${claim.festival.festival.emoji}\nClaim it to keep it, even after the festival.`
                     : showReviewAsk
-                      ? `We've taken ${settings.lifetimeBreaksCompleted} breaks together! 🎉\n${STORE_REVIEW_URL ? 'A quick rating' : 'A GitHub star'} would really help me find new friends.`
+                      ? `We've taken ${settings.lifetimeBreaksCompleted} breaks together! 🎉\nHow am I doing? Tap a star.`
                       : null)
               }
               userName={settings.userName}
@@ -571,7 +581,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
                   <button type="button" aria-label="Hide buddy"
                     className="display-close non-draggable"
                     onClick={() => setIsDismissed(true)}
-                    title="Hide (keeps running in the tray)"
+                    title={IN_EXTENSION ? 'Hide until the next reminder (turn it off from the toolbar button)' : 'Hide (keeps running in the tray)'}
                   >
                     ✕
                   </button>
@@ -677,10 +687,16 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
               )}
 
               {showReviewAsk && (
+                <div className="bubble-stars non-draggable" role="group" aria-label="Rate Pixel Buddy">
+                  {[1, 2, 3, 4, 5].map((stars) => (
+                    <button key={stars} type="button" className="bubble-star" aria-label={`${stars} star${stars === 1 ? '' : 's'}`} onClick={() => answerReviewAsk(stars)}>
+                      ★
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showReviewAsk && (
                 <div className="action-buttons non-draggable">
-                  <button className="btn btn-primary" onClick={() => answerReviewAsk('yes')}>
-                    {STORE_REVIEW_URL ? 'Rate ⭐' : 'Star ⭐'}
-                  </button>
                   <button className="btn btn-secondary" onClick={() => answerReviewAsk('later')}>
                     Later
                   </button>

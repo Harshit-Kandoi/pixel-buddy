@@ -32,16 +32,39 @@ html.popup, html.popup body {
 }
 html.popup #root { width: 400px; height: 560px; }
 
+/* A frame can't see the page behind it, so the frosted-glass blur only cost GPU time on every
+   repaint while drawing nothing. Slightly more solid backgrounds look the same. */
+.speech-bubble, .widget-panel, .settings-panel { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.overlay .speech-bubble { background: rgba(15, 23, 42, 0.95); }
+html.overlay .widget-panel { background: rgba(15, 23, 42, 0.94); }
+
+/* Toolbar popup: on/off and where the buddy shows up. */
 .popup-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 36px;
-  padding: 0 14px;
+  padding: 8px 14px 6px;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: 12px;
   color: #cbd5e1;
+  background: #12221f;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  cursor: pointer;
 }
-.popup-bar input { accent-color: var(--theme-primary); width: 16px; height: 16px; cursor: pointer; }
+.popup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 28px; }
+.popup-row[hidden] { display: none; }
+.popup-row-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.popup-title { font-size: 13px; font-weight: 700; color: #f1f5f9; }
+.popup-status { font-size: 11px; color: #86efac; }
+.popup-status.off { color: #94a3b8; }
+.popup-subrow { justify-content: flex-start; gap: 16px; padding-top: 2px; }
+.popup-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; min-width: 0; white-space: nowrap; }
+.popup-check[hidden] { display: none; }
+.popup-check span { overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.popup-check b { color: #e2e8f0; font-weight: 600; }
+.popup-check input { accent-color: var(--theme-primary); width: 14px; height: 14px; margin: 0; cursor: pointer; }
+.popup-check input:disabled, .popup-check input:disabled + span { opacity: 0.5; cursor: default; }
+html.popup .settings-panel { max-height: 100%; }
+
+html.popup #root:has(.popup-off) { height: auto !important; }
+.popup-off { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 28px 32px 30px; color: #cbd5e1; }
+.popup-off img { filter: grayscale(1) opacity(0.75); }
+.popup-off h2 { margin: 4px 0 0; font-size: 16px; color: #f1f5f9; }
+.popup-off p { margin: 0; font-size: 12px; line-height: 1.5; color: #94a3b8; }
+.popup-off .btn { margin-top: 6px; min-width: 140px; justify-content: center; }

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AppSettings } from '../../../utils/types';
+import { AppSettings, StateMachineData } from '../../../utils/types';
+import { NowCard } from './NowCard';
+import { Feedback } from './Feedback';
 import { AWAY_MINUTE_CHOICES } from '../../../utils/constants';
 import { notesAsText, removeNote, visibleNotes } from '../../../utils/notes';
 import { toMediaUrl } from '../../../utils/mediaUrl';
@@ -14,6 +16,10 @@ interface SettingsProps {
   onSave: (settings: Partial<AppSettings>) => void;
   onClose: () => void;
   onHeaderMouseDown?: (e: React.MouseEvent) => void;
+  /** Live timers for the status card at the top. */
+  stateData?: StateMachineData | null;
+  /** Open scrolled to the feedback card, with these stars picked (from the buddy's ask). */
+  feedbackRating?: number;
 }
 
 const IN_EXTENSION_PAGE = location.protocol === 'chrome-extension:';
@@ -42,7 +48,7 @@ function getFilename(p: string): string {
 }
 
 
-export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, onHeaderMouseDown }) => {
+export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, onHeaderMouseDown, stateData = null, feedbackRating = 0 }) => {
   const [workDuration, setWorkDuration] = useState(settings.workDuration);
   const [breakDuration, setBreakDuration] = useState(settings.breakDuration);
   const [snoozeDuration, setSnoozeDuration] = useState(settings.snoozeDuration);
@@ -66,6 +72,13 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
   const soundPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Arriving from the buddy's "How am I doing?": show the feedback card.
+  useEffect(() => {
+    if (!feedbackRating) return undefined;
+    const id = setTimeout(() => scrollRef.current?.querySelector('#feedback')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150);
+    return () => clearTimeout(id);
+  }, [feedbackRating]);
 
   const refreshLibrary = useCallback(async () => {
     const lib = await window.api.getMediaLibrary();
@@ -308,7 +321,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
         </button>
       </div>
 
-      <div className="settings-welcome"><span className="settings-eyebrow">YOUR LITTLE WORKDAY COMPANION</span><p>A good day starts with a little balance.</p></div>
+      {stateData ? (
+        <NowCard stateData={stateData} settings={settings} />
+      ) : (
+        <div className="settings-welcome"><span className="settings-eyebrow">YOUR LITTLE WORKDAY COMPANION</span><p>A good day starts with a little balance.</p></div>
+      )}
       {/* Tab Selectors Bar */}
       <div className="settings-tab-bar">
         <button 
@@ -703,7 +720,11 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
               <div className="switch-row">
                 <div className="switch-label-group">
                   <span className="switch-label">Always On Screen</span>
-                  <span className="switch-sublabel">Show buddy during work sessions, not just on break</span>
+                  <span className="switch-sublabel">
+                    {alwaysVisible
+                      ? 'Show buddy during work sessions, not just on break'
+                      : `Off: the buddy only pops up for reminders and breaks. Timers keep running; see them at the top of Settings${IN_EXTENSION_PAGE ? ' or on the toolbar badge' : ' or in the tray menu'}.`}
+                  </span>
                 </div>
                 <label className="switch non-draggable">
                   <input
@@ -1007,13 +1028,16 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
           </div>
         )}
 
-        {/* Quit Button (visible on both tabs for convenience) */}
+        {/* Feedback and Quit (on both tabs) */}
+        <Feedback key={feedbackRating} settings={settings} onSave={onSave} initialRating={feedbackRating} />
+
         <button 
           className="btn btn-danger quit-btn non-draggable" 
           onClick={() => window.api.quit()}
+          title={IN_EXTENSION_PAGE ? 'Stops all reminders and removes the buddy from your tabs. Turn it back on from the toolbar button.' : undefined}
           style={{ marginTop: '16px', width: '100%', display: 'flex', justifyContent: 'center' }}
         >
-          Quit Pixel Buddy
+          {IN_EXTENSION_PAGE ? 'Turn off Pixel Buddy' : 'Quit Pixel Buddy'}
         </button>
       </div>
     </div>

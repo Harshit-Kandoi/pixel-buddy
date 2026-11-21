@@ -82,6 +82,7 @@ Pixel Buddy shows a small companion on web pages that reminds the user to take b
 | Permission | Justification |
 | --- | --- |
 | `storage` | Saves the user's timer settings, daily counters, and the buddy's on-screen position locally. |
+| `activeTab` | When the user opens the toolbar popup, reads the current tab's site name so the popup can offer "show the buddy on this site" (a per-site hide switch). Nothing about the page is read or stored except that site name, and only if the user turns the buddy off there. |
 | `idle` | Pauses the focus timer while the user is away from the computer and recognizes when they return from a break. |
 | `alarms` | Wakes the extension's background service worker periodically so the break timer keeps running accurately. |
 | `offscreen` | Plays the short break reminder chime once from an offscreen audio document, instead of in every open tab. |
@@ -90,7 +91,7 @@ Pixel Buddy shows a small companion on web pages that reminds the user to take b
 
 **Remote code:** No, I am not using remote code.
 
-**Data usage:** Check **none** of the data categories. Then certify all three statements: no selling of data, no use unrelated to the single purpose, and no use for creditworthiness or lending.
+**Data usage:** Check **Personally identifiable information** only: the optional feedback card in settings sends a star rating, picked options, a note, and an email address only if the user types one (for a reply), and only when the user presses Send. Nothing else is collected. Then certify all three statements: no selling of data, no use unrelated to the single purpose, and no use for creditworthiness or lending.
 
 **Privacy policy URL:** https://pixelbuddy.harshitkandoi.in/privacy.html (source: `website/dist/privacy.html`, published with the website).
 

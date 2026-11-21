@@ -37,5 +37,9 @@ export const FRAME_TAG = 'pixel-buddy';
 export const KEY_SETTINGS = 'settings';
 export const KEY_PAGES_ENABLED = 'pagesEnabled';
 export const KEY_POSITION = 'position';
+/** The master switch: false turns Pixel Buddy off (no timers, reminders, or buddy in tabs). */
+export const KEY_ENABLED = 'enabled';
+/** Hostnames where the buddy stays out of the page (it keeps running everywhere else). */
+export const KEY_HIDDEN_SITES = 'hiddenSites';
 
 export const call = <T>(message: Call): Promise<T> => chrome.runtime.sendMessage(message);

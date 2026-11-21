@@ -50,6 +50,8 @@ export const DEFAULT_SETTINGS = {
   lifetimeBreaksCompleted: 0,
   breakNotes: [] as BreakNote[],
   reviewAskAt: 3,
+  feedbackRating: 0,
+  feedbackSentAt: null as number | null,
 };
 
 export const ACTIVITY_WEIGHTS = {

@@ -3,14 +3,12 @@ import './extension.css';
 import { createRoot } from 'react-dom/client';
 import App from '../../src/renderer/src/App';
 import { installApi } from './api';
-import { FRAME_TAG, KEY_PAGES_ENABLED, KEY_POSITION, PORT_PAGE, type FrameMessage, type Position, type Rect } from './protocol';
+import { FRAME_TAG, KEY_ENABLED, KEY_POSITION, PORT_PAGE, type FrameMessage, type Position, type Rect } from './protocol';
 
 // Runs inside the overlay iframe the content script adds to each tab. The frame is just
 // the app's box in the page corner, so if it ever fails to render it can only cover that
 // box. While dragging, the frame briefly covers the viewport and the app moves inside it:
 // a frame that moves under the pointer gets unreliable pointer coordinates.
-// For host methods this environment doesn't need.
-const noop = (): void => undefined;
 const post = (message: FrameMessage): void => window.parent.postMessage({ [FRAME_TAG]: message }, '*');
 const root = document.getElementById('root')!;
 const UI_SELECTOR = '.buddy-container, .speech-bubble, .widget-panel, .side-controls, .settings-trigger, .display-close, .settings-panel';
@@ -49,16 +47,13 @@ function layout(): void {
   post(dragging ? { type: 'frame', full: true } : { type: 'frame', full: false, right: position.right, bottom: position.bottom, ...size });
 }
 
-// Tell the content script where the visible UI is, so it can take the pointer over it.
-setInterval(() => {
-  const rects = Array.from(document.querySelectorAll<HTMLElement>(UI_SELECTOR), el => {
-    const r = el.getBoundingClientRect();
-    return { x: Math.floor(r.left) - 4, y: Math.floor(r.top) - 4, width: Math.ceil(r.width) + 8, height: Math.ceil(r.height) + 8 };
-  });
-  if (JSON.stringify(rects) === JSON.stringify(hitRects)) return;
-  hitRects = rects;
-  post({ type: 'hitRects', rects });
-}, 100);
+// Tell the content script where the visible UI is, so it can take the pointer over it. The app
+// already measures its UI for the desktop window (and only reports changes); while settings
+// are open the whole box is UI, like the desktop app does.
+let settingsVisible = false;
+function postHitRects(): void {
+  post({ type: 'hitRects', rects: settingsVisible ? [...hitRects, { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }] : hitRects });
+}
 
 installApi(PORT_PAGE, {
   resize: (width, height) => {
@@ -68,8 +63,8 @@ installApi(PORT_PAGE, {
     layout();
   },
   setVisible: visible => post({ type: 'visible', visible }),
-  setHitRects: noop,
-  setSettingsVisible: noop,
+  setHitRects: rects => { hitRects = rects; postHitRects(); },
+  setSettingsVisible: value => { settingsVisible = value; postHitRects(); },
   dragStart: () => { dragging = true; dragFrom = position; layout(); },
   dragEnd: anchor => {
     if (expanded()) {
@@ -89,7 +84,8 @@ installApi(PORT_PAGE, {
     layout();
     void chrome.storage.local.set({ [KEY_POSITION]: position });
   },
-  quit: () => { void chrome.storage.local.set({ [KEY_PAGES_ENABLED]: false }); },
+  // "Turn off Pixel Buddy" in settings: the master switch (turn it back on from the toolbar).
+  quit: () => { void chrome.storage.local.set({ [KEY_ENABLED]: false }); },
 }, { onlyWhileVisible: true });
 
 window.addEventListener('mousedown', e => { pressedAt = { x: e.clientX, y: e.clientY }; }, true);
