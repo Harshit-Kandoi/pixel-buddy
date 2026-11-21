@@ -33,6 +33,11 @@ When it's break time, your buddy leads you through a short routine and acts it o
 • Break notes: jot what you were doing before a break, and your buddy reminds you when you're back
 • The toolbar icon counts down the minutes to your next break
 
+🔥 WEEKLY HISTORY & BREAK STREAKS
+• See your focus time for the last 7 days, with breaks and water for each day
+• Keep a streak of days with real breaks. Days off never break it, so weekends are safe
+• Your buddy cheers when you hit 3, 7, 14, 30 days and more
+
 💧 WATER REMINDERS
 • Gentle hydration nudges and a daily goal of glasses of water
 • Log a glass any time in one tap, even ones you drank away from your desk
@@ -49,10 +54,12 @@ When it's break time, your buddy leads you through a short routine and acts it o
 
 🌿 NEVER IN THE WAY
 • One buddy and one timer across all your tabs. Drag it anywhere.
-• Clicks pass through the space around it. Hide it with one switch.
+• Clicks pass through the space around it.
+• Hide it on any site, or turn Pixel Buddy off completely from the toolbar. Off means off: no timer, no reminders, nothing running in your tabs.
+• Light on your computer: background tabs get no live updates, and the buddy rests when nothing's happening.
 
 🔒 PRIVATE BY DESIGN
-No account, no analytics, no tracking. Your settings stay in your browser. It never reads the pages you visit.
+No account, no analytics, no tracking. Your settings stay in your browser. It never reads the pages you visit. The optional feedback form in settings sends only what you choose to write, when you press Send.
 
 Free and open source (MIT). Also available as a desktop app for Windows, macOS, and Linux: https://pixelbuddy.harshitkandoi.in/
 
