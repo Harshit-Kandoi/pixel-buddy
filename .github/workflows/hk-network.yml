@@ -1,0 +1,81 @@
+# HK network: keeps harshitkandoi.in in step with this repository.
+#
+# On pull requests that touch hk-lab.json it checks the manifest.
+# On every push to main it checks it again and pings the company page, which
+# re-reads hk-lab.json and this repository's activity within seconds.
+#
+# Setup (Settings -> Secrets and variables -> Actions):
+#   variable HK_NETWORK_URL     https://harshitkandoi.in/api/network
+#   secret   HK_NETWORK_SECRET  same value as NETWORK_REVALIDATE_SECRET on the company page
+# Without them the job still passes and the page refreshes within the hour.
+# Format and setup: Company-page/docs/NETWORK.md
+
+name: HK network
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths: [hk-lab.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hk-network-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: hk-lab.json
+          sparse-checkout-cone-mode: false
+
+      - name: Check hk-lab.json
+        run: |
+          node --input-type=module <<'JS'
+          import { existsSync, readFileSync } from 'node:fs';
+          if (!existsSync('hk-lab.json')) { console.log('::notice::No hk-lab.json; the company page uses its built-in copy.'); process.exit(0); }
+          const m = JSON.parse(readFileSync('hk-lab.json', 'utf8'));
+          const errors = [];
+          const str = (k, max) => { if (typeof m[k] !== 'string' || !m[k].trim()) errors.push(`${k} is required`); else if (m[k].length > max) errors.push(`${k} is longer than ${max} characters`); };
+          str('name', 40); str('tagline', 220); str('status', 28);
+          if (!['live', 'beta', 'build', 'planned'].includes(m.stage)) errors.push('stage must be live, beta, build or planned');
+          if (m.url !== null && m.url !== undefined && !/^https:\/\//.test(m.url)) errors.push('url must start with https:// (or be null)');
+          if (m.stack !== undefined && (!Array.isArray(m.stack) || m.stack.length > 6)) errors.push('stack must be a list of up to 6 items');
+          const ids = new Set();
+          for (const [i, u] of (m.updates || []).entries()) {
+            if (!/^[\w-]{1,80}$/.test(u.id || '')) errors.push(`updates[${i}].id must be letters, numbers, - or _`);
+            if (ids.has(u.id)) errors.push(`updates[${i}].id "${u.id}" is used twice`);
+            ids.add(u.id);
+            if (!Number.isFinite(Date.parse(u.date))) errors.push(`updates[${i}].date must be a date like 2026-11-22`);
+            if (typeof u.title !== 'string' || !u.title.trim() || u.title.length > 120) errors.push(`updates[${i}].title is required (max 120 characters)`);
+            if (u.body !== undefined && (typeof u.body !== 'string' || u.body.length > 1500)) errors.push(`updates[${i}].body must be text (max 1500 characters)`);
+          }
+          if ((m.updates || []).length > 20) errors.push('keep at most 20 updates; older ones can be removed');
+          for (const e of errors) console.log(`::error file=hk-lab.json::${e}`);
+          if (errors.length) process.exit(1);
+          console.log(`hk-lab.json ok: ${m.name}, ${m.status}, ${(m.updates || []).length} update(s)`);
+          JS
+
+      - name: Ping the company page
+        if: github.event_name == 'push'
+        env:
+          HK_NETWORK_URL: ${{ vars.HK_NETWORK_URL }}
+          HK_NETWORK_SECRET: ${{ secrets.HK_NETWORK_SECRET }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -z "$HK_NETWORK_URL" ] || [ -z "$HK_NETWORK_SECRET" ]; then
+            echo "::notice::HK_NETWORK_URL or HK_NETWORK_SECRET is not set; the company page will refresh within the hour."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 20 --retry 2 \
+            -X POST "$HK_NETWORK_URL" \
+            -H "Authorization: Bearer $HK_NETWORK_SECRET" \
+            -H "Content-Type: application/json" \
+            --data "{\"repository\":\"$REPOSITORY\"}" \
+            || echo "::warning::Could not reach the company page; it will refresh within the hour."
