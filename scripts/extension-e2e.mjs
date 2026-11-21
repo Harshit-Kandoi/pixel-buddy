@@ -1,7 +1,7 @@
 // End-to-end dry run of the built Chrome extension in a throwaway headless Chrome profile:
 // install, buddy on a real web page, guided break, settings and festival calendar, water
 // logging, share card, rating prompt and feedback card, a real one-minute break, the toolbar
-// popup, hiding on one site, the on/off switch, and an upgrade from 1.0.0 settings. Uses real
+// popup, daily history, hiding on one site, the on/off switch, and an upgrade from 1.0.0 settings. Uses real
 // mouse clicks through the click-through overlay.
 //
 // Usage: npm run ext:test            (builds first; about 90 seconds)
@@ -351,6 +351,12 @@ try {
   await evaluate(frame, `window.api.saveSettings({ awayMinutes: 2 })`);
   check("Away time can be changed", await waitFor(() => evaluate(worker, `chrome.storage.local.get('settings').then(s => s.settings.awayMinutes === 2 || null)`), "away time").catch(() => false));
 
+  // Daily history: a new day files yesterday's counters (they feed the week chart and streak).
+  const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("en-CA");
+  await evaluate(frame, `window.api.saveSettings({ hydrationLastResetDate: '${yesterday}', statsFocusMinutesToday: 90, statsBreaksCompletedToday: 2 })`);
+  const filed = await evaluate(frame, `window.api.getSettings().then(s => ({ breaks: s.history.find(d => d.date === '${yesterday}')?.breaks, today: s.statsBreaksCompletedToday }))`);
+  check("A new day files yesterday into history and starts today at zero", filed.breaks === 2 && filed.today === 0, JSON.stringify(filed));
+
   // Break notes: jot what you're doing at the reminder, see it when you're back.
   await send("Target.activateTarget", { targetId: pageId });
   await evaluate(frame, `window.api.reset()`);
@@ -405,6 +411,8 @@ try {
   // (the same startup path an update takes).
   await evaluate(worker, `chrome.storage.local.set({ settings: { workDuration: 25, breakDuration: 5, snoozeDuration: 30, sound: true, userName: 'Old user', hydrationGoal: 6, themeHue: 200 } })`);
   for (const t of (await targets()).filter((t) => t.type === "page" && (t.url.startsWith(origin) || t.targetId === pageId))) await send("Target.closeTarget", { targetId: t.targetId });
+  // The offscreen audio page (left open by the reminder chime) keeps the worker alive; close it too.
+  await evaluate(worker, `chrome.offscreen.closeDocument().catch(() => {})`).catch(() => {});
   const workerTarget = (await targets()).find((t) => t.type === "service_worker" && t.url.startsWith(origin));
   await send("Target.closeTarget", { targetId: workerTarget.targetId }).catch(() => {});
   await waitFor(async () => !(await targets()).some((t) => t.type === "service_worker" && t.url.startsWith(origin)), "the worker to stop", 15000);

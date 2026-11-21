@@ -2,6 +2,7 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_SETTINGS } from '../utils/constants';
+import { dailyReset, localDate } from '../utils/history';
 
 const SETTINGS_FILE_NAME = 'settings.json';
 
@@ -43,17 +44,11 @@ export class SettingsManager {
   }
 
   private checkDailyReset(): void {
-    const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-    if (this.settings.hydrationLastResetDate !== todayStr) {
-      console.log(`Daily Reset: Resetting stats and water count. Prev reset: ${this.settings.hydrationLastResetDate}, Today: ${todayStr}`);
-      this.save({
-        hydrationDrankToday: 0,
-        statsFocusMinutesToday: 0,
-        statsBreaksCompletedToday: 0,
-        statsBreaksSkippedToday: 0,
-        statsBreaksSnoozedToday: 0,
-        hydrationLastResetDate: todayStr,
-      });
+    const todayStr = localDate(new Date()); // YYYY-MM-DD in local time
+    const patch = dailyReset(this.settings, todayStr);
+    if (patch) {
+      console.log(`Daily Reset: filing ${this.settings.hydrationLastResetDate} into history and starting ${todayStr}`);
+      this.save(patch);
     }
   }
 

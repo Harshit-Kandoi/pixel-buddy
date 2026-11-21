@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppSettings, StateMachineData } from '../../../utils/types';
 import { NowCard } from './NowCard';
 import { Feedback } from './Feedback';
+import { WeekCard } from './WeekCard';
 import { AWAY_MINUTE_CHOICES } from '../../../utils/constants';
 import { notesAsText, removeNote, visibleNotes } from '../../../utils/notes';
 import { toMediaUrl } from '../../../utils/mediaUrl';
@@ -38,7 +39,7 @@ const CALL_DETECTION_HELP =
     : navigator.userAgent.includes('Windows')
       ? 'Break and water reminders wait while any app is using your microphone.'
       : navigator.userAgent.includes('Mac')
-        ? 'Break and water reminders wait while you are in a Zoom meeting.'
+        ? 'Break and water reminders wait while any app is using your microphone (Zoom, Teams, FaceTime, Meet…).'
         : 'Break and water reminders wait during calls (not detected on Linux yet).';
 
 // Friendly label from a library path like custom_buddy_<ts>__<original>.<ext>
@@ -924,6 +925,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 <span className="focus-streak-text">focused sessions</span>
               </div>
             </div>
+
+            <WeekCard settings={settings} />
 
             {/* Daily Hydration Progress */}
             <div className="dashboard-stats-card water-stats-card">

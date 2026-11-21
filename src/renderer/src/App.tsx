@@ -12,6 +12,7 @@ import { isImageFile } from '../../utils/mediaFormats';
 import { routineForBreak, stepAt } from '../../utils/breakRoutines';
 import { HAPPY_FOR_MS, TIRED_LINES, buddyMood, finishedBreak, moodReason } from '../../utils/mood';
 import { NOTE_MAX_LENGTH, addNote, markSeen, pendingNote } from '../../utils/notes';
+import { STREAK_MILESTONES, breakStreak, localDate } from '../../utils/history';
 
 const IN_EXTENSION = location.protocol === 'chrome-extension:';
 // Battery: after this long with nothing happening the buddy rests (no endless float, festival
@@ -66,6 +67,7 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
   const [isDismissed, setIsDismissed] = useState(false);
   const [claimLaterAt, setClaimLaterAt] = useState(-1); // "Later" on the claim prompt waits for the next break
   const lastFestivalBreaks = useRef<number | null>(null);
+  const lastStreak = useRef<number | null>(null);
   const [onBattery, setOnBattery] = useState(false);
   const [batteryTipDismissed, setBatteryTipDismissed] = useState(false);
   const [resting, setResting] = useState(false);
@@ -235,6 +237,17 @@ function App({ initialShowSettings = true }: { initialShowSettings?: boolean }):
       const until = status.festival.lastDay.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
       const left = CLAIM_BREAKS - status.breaks;
       setClickedDialogue(`${status.breaks}/${CLAIM_BREAKS} breaks toward the ${name} buddy ${emoji}\n${left} more by ${until} and it's yours to keep!`);
+    }
+  }, [settings]);
+
+  // Break streak milestones (3, 7, 14… working days in a row with a break): the buddy cheers.
+  useEffect(() => {
+    if (!settings) return;
+    const { current } = breakStreak(settings, localDate(new Date()));
+    const previous = lastStreak.current;
+    lastStreak.current = current;
+    if (previous !== null && current > previous && STREAK_MILESTONES.includes(current)) {
+      setClickedDialogue(`🔥 ${current} days in a row with breaks!\nThat's a real habit${settings.userName ? `, ${settings.userName}` : ''}. Proud of you.`);
     }
   }, [settings]);
 

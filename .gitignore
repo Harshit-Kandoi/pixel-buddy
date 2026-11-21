@@ -47,3 +47,6 @@ Thumbs.db
 # Site helper local state
 website/.git/
 website/.openai/*.local.json
+
+# Built by scripts/build-mac-helper.sh from native/mac/mic-in-use.swift
+resources/mac/

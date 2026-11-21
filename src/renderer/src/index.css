@@ -1767,3 +1767,21 @@ html.buddy-left .buddy-mood { right: auto; left: 4px; }
 .bubble-star { font-size: 26px; color: #fbbf24; opacity: 0.55; }
 .bubble-stars:hover .bubble-star { opacity: 1; }
 .bubble-stars .bubble-star:hover ~ .bubble-star { opacity: 0.35; color: #94a3b8; }
+
+/* Dashboard: this week's focus and the break streak */
+.week-card { margin-top: 10px; }
+.week-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.week-header .stat-card-title { margin-bottom: 0; }
+.streak-pill { font-size: 11px; font-weight: 600; color: #fde68a; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.28); border-radius: 999px; padding: 2px 9px; white-space: nowrap; cursor: default; }
+.streak-pill.none { color: #a8bcaf; background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.1); font-weight: 500; }
+.week-detail { margin: 8px 0 6px; min-height: 16px; font-size: 11px; color: #cfe0d4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; height: 86px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 0; }
+.week-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; background: none; border: 0; border-radius: 6px; cursor: default; font: inherit; min-width: 0; }
+.week-day:focus-visible { outline: 2px solid var(--theme-primary); outline-offset: 1px; }
+.week-bar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; border-radius: 6px; transition: background 0.15s; }
+.week-day.active .week-bar-track { background: rgba(255, 255, 255, 0.05); }
+.week-bar { width: 60%; max-width: 18px; border-radius: 4px 4px 0 0; background: var(--theme-primary); opacity: 0.85; transition: opacity 0.15s; }
+.week-day.active .week-bar, .week-day.today .week-bar { opacity: 1; }
+.week-label { font-size: 10px; color: #93a89b; line-height: 1; padding-bottom: 4px; }
+.week-day.today .week-label { color: #e2eade; font-weight: 600; }
+.week-best { margin-top: 6px; font-size: 10px; color: #93a89b; }

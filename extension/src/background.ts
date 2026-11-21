@@ -4,6 +4,7 @@ import type { ActivityMonitor } from '../../src/main/activity';
 import { APP_STATES, DEFAULT_SETTINGS, awaySecondsFor } from '../../src/utils/constants';
 import { WEBSITE_URL } from '../../src/utils/links';
 import { fitForSync, mergeNotes } from '../../src/utils/notes';
+import { dailyReset, localDate } from '../../src/utils/history';
 import type { AppSettings, StateMachineData } from '../../src/utils/types';
 import { KEY_ENABLED, KEY_SETTINGS, PORT_PAGE, PORT_POPUP, type Call, type Push, type SchedulerAction } from './protocol';
 
@@ -52,16 +53,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 function checkDailyReset(): void {
-  const today = new Date().toLocaleDateString('en-CA');
-  if (settings.hydrationLastResetDate === today) return;
-  saveSettings({
-    hydrationDrankToday: 0,
-    statsFocusMinutesToday: 0,
-    statsBreaksCompletedToday: 0,
-    statsBreaksSkippedToday: 0,
-    statsBreaksSnoozedToday: 0,
-    hydrationLastResetDate: today,
-  });
+  const patch = dailyReset(settings, localDate(new Date()));
+  if (patch) saveSettings(patch);
 }
 
 const manager = {
