@@ -828,7 +828,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, o
                 <div className="switch-row">
                   <div className="switch-label-group">
                     <span className="switch-label">Away After</span>
-                    <span className="switch-sublabel">No keyboard or mouse this long pauses the focus timer. Being away this long counts as a break.</span>
+                    <span className="switch-sublabel">No keyboard or mouse this long pauses the focus timer until you&apos;re back. Playing video counts as being here.</span>
                   </div>
                   <select
                     aria-label="Away after"

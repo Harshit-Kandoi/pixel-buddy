@@ -207,7 +207,7 @@ describe('Scheduler', () => {
     scheduler.stop();
   });
 
-  test('resets work timer when long break detected callback fires', () => {
+  test('keeps the work timer when the long break callback fires (away pauses, never resets)', () => {
     const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
     scheduler.start(vi.fn());
 
@@ -218,8 +218,8 @@ describe('Scheduler', () => {
     // Trigger long break callback
     onBreakDetectedCb();
 
-    expect(sm.getData().activeWorkSeconds).toBe(0);
-    expect(sm.getSkipsCount()).toBe(0);
+    expect(sm.getData().activeWorkSeconds).toBe(30);
+    expect(sm.getSkipsCount()).toBe(1);
     expect(sm.getState()).toBe(APP_STATES.WORKING);
 
     scheduler.stop();
@@ -249,11 +249,10 @@ describe('Scheduler', () => {
     scheduler.stop();
   });
 
-  test('counts a long absence in IDLE as an offline break', () => {
+  test('a long absence in IDLE pauses the timer and resumes it on return', () => {
     const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
     scheduler.start(vi.fn());
-    scheduler.getStateMachine().setWorkSeconds(59);
-    scheduler.getStateMachine().setSkipSeconds(10);
+    scheduler.getStateMachine().setWorkSeconds(30);
     onIdleDetectedCb();
     mockActivityMonitor.tick.mockImplementation((canReset) => {
       if (canReset) onBreakDetectedCb();
@@ -261,8 +260,84 @@ describe('Scheduler', () => {
       return { isActiveThisSecond: true };
     });
     vi.advanceTimersByTime(1000);
-    expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'WORKING', activeWorkSeconds: 1 });
+    expect(scheduler.getStateMachine().getData()).toMatchObject({ state: 'WORKING', activeWorkSeconds: 31 });
     scheduler.stop();
+  });
+
+  test('playing media is presence: away time restarts each tick, and an away state ends', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    onIdleDetectedCb();
+    expect(scheduler.getStateMachine().getState()).toBe(APP_STATES.IDLE);
+    mockActivityMonitor.markActive.mockClear();
+    scheduler.setWatchingMedia(true);
+    expect(scheduler.getStateMachine().getState()).toBe(APP_STATES.WORKING);
+    const afterStart = mockActivityMonitor.markActive.mock.calls.length;
+    vi.advanceTimersByTime(3000);
+    expect(mockActivityMonitor.markActive.mock.calls.length).toBe(afterStart + 3);
+    scheduler.setWatchingMedia(false);
+    mockActivityMonitor.markActive.mockClear();
+    vi.advanceTimersByTime(3000);
+    expect(mockActivityMonitor.markActive).not.toHaveBeenCalled();
+    scheduler.stop();
+  });
+
+  test('an away report while a video plays does not make the buddy go idle', () => {
+    const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+    scheduler.start(vi.fn());
+    scheduler.setWatchingMedia(true);
+    onIdleDetectedCb(); // the extension's chrome.idle can fire on its own while you watch
+    expect(scheduler.getStateMachine().getState()).toBe(APP_STATES.WORKING);
+    scheduler.stop();
+  });
+
+  describe('focus minutes for the dashboard', () => {
+    const focus = (): number => mockSettingsManager.getSettings().statsFocusMinutesToday ?? 0;
+
+    test('counts waiting on a break reminder, a snooze and the wait after a skip', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.start(vi.fn());
+      const sm = scheduler.getStateMachine();
+      sm.transitionTo(APP_STATES.POPUP);
+      vi.advanceTimersByTime(60_000);
+      expect(focus()).toBe(1);
+      sm.setSnoozeSeconds(600);
+      sm.transitionTo(APP_STATES.SNOOZE);
+      vi.advanceTimersByTime(60_000);
+      expect(focus()).toBe(2);
+      sm.setSkipSeconds(600);
+      sm.transitionTo(APP_STATES.WORKING);
+      vi.advanceTimersByTime(60_000);
+      expect(focus()).toBe(3);
+      scheduler.stop();
+    });
+
+    test('does not count breaks, being away, or a pause', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.start(vi.fn());
+      const sm = scheduler.getStateMachine();
+      sm.setBreakSeconds(600);
+      sm.transitionTo(APP_STATES.BREAK);
+      vi.advanceTimersByTime(60_000);
+      sm.transitionTo(APP_STATES.WORKING);
+      mockActivityMonitor.getContinuousIdleSeconds.mockReturnValue(1000);
+      vi.advanceTimersByTime(60_000);
+      mockActivityMonitor.getContinuousIdleSeconds.mockReturnValue(0);
+      sm.togglePause(true);
+      vi.advanceTimersByTime(60_000);
+      expect(focus()).toBe(0);
+      scheduler.stop();
+    });
+
+    test('a reset in the middle of a minute does not lose it', () => {
+      const scheduler = new Scheduler(mockSettingsManager, mockActivityMonitor, vi.fn());
+      scheduler.start(vi.fn());
+      vi.advanceTimersByTime(40_000);
+      scheduler.handleReset();
+      vi.advanceTimersByTime(20_000);
+      expect(focus()).toBe(1);
+      scheduler.stop();
+    });
   });
 
   test('changing hydration interval applies immediately and clears its reminder', () => {

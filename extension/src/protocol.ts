@@ -8,7 +8,8 @@ export type Call =
   | { type: 'getState' }
   | { type: 'action'; action: SchedulerAction }
   | { type: 'input' }
-  | { type: 'meeting'; active: boolean };
+  | { type: 'meeting'; active: boolean }
+  | { type: 'media'; active: boolean };
 
 export type SchedulerAction = 'takeBreak' | 'buddyInteraction' | 'snooze' | 'skip' | 'reset' | 'togglePause' | 'logHydration' | 'snoozeHydration' | 'dismissHydration';
 
