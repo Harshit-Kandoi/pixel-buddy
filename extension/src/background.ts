@@ -135,6 +135,7 @@ function handleChange(data: StateMachineData): void {
 
 function handleTick(data: StateMachineData): void {
   expireMeetings();
+  expireMedia();
   broadcast({ type: 'tick', data });
   // Writing every second also keeps the worker alive (extension API calls reset its idle timer).
   persist(data);
@@ -319,8 +320,27 @@ function expireMeetings(): void {
   if (!meetingTabs.size) updateMeeting();
 }
 
+// Tabs playing video: watching isn't being away. Same report-and-expire scheme as calls.
+const mediaTabs = new Map<number, number>();
+function updateMedia(): void {
+  scheduler.setWatchingMedia(settings.smartMonitoringEnabled && mediaTabs.size > 0);
+}
+function reportMedia(tabId: number, active: boolean): void {
+  if (!enabled) return;
+  if (active) mediaTabs.set(tabId, Date.now() + MEETING_TTL_MS);
+  else mediaTabs.delete(tabId);
+  updateMedia();
+}
+function expireMedia(): void {
+  if (!mediaTabs.size) return;
+  const now = Date.now();
+  for (const [tabId, expires] of mediaTabs) if (expires < now) mediaTabs.delete(tabId);
+  if (!mediaTabs.size) updateMedia();
+}
+
 chrome.tabs.onRemoved.addListener(tabId => {
   if (meetingTabs.delete(tabId)) updateMeeting();
+  if (mediaTabs.delete(tabId)) updateMedia();
 });
 
 // ---- Messaging ----
@@ -357,6 +377,7 @@ function handleCall(message: Call): unknown {
       if (settings.awayMinutes !== previous.awayMinutes) chrome.idle.setDetectionInterval(awaySeconds());
       scheduler.handleSettingsChanged(previous);
       updateMeeting();
+      updateMedia();
       return snapshot();
     }
     case 'action': if (enabled) runAction(message.action); return null;
@@ -366,7 +387,8 @@ function handleCall(message: Call): unknown {
       // Input in a tab is proof you're back, even before chrome.idle catches up.
       if (idleSince !== null) handleIdleState('active');
       return null;
-    case 'meeting': return null; // handled with the sender's tab in onMessage
+    case 'meeting':
+    case 'media': return null; // handled with the sender's tab in onMessage
   }
 }
 
@@ -374,6 +396,11 @@ const fromExtensionPage = (sender: chrome.runtime.MessageSender): boolean => !!s
 
 chrome.runtime.onMessage.addListener((message: Call, sender, sendResponse) => {
   if (typeof message?.type !== 'string') return false;
+  if (message.type === 'media') {
+    const tabId = sender.tab?.id;
+    if (tabId !== undefined) void ready.then(() => reportMedia(tabId, message.active === true));
+    return false;
+  }
   if (message.type === 'meeting') {
     const tabId = sender.tab?.id;
     if (tabId !== undefined) void ready.then(() => reportMeeting(tabId, message.active === true));

@@ -5,23 +5,36 @@
   "status": "Live · v1.4",
   "stage": "live",
   "stack": ["Electron", "React", "TypeScript"],
+  "platforms": ["Windows", "macOS", "Linux", "Chrome"],
   "url": "https://pixelbuddy.harshitkandoi.in",
   "cta": "Download",
-  "order": 3,
   "updates": [
     {
       "id": "2026-11-21-v1-4",
       "date": "2026-11-21",
       "tag": "Release",
       "title": "Pixel Buddy 1.4: break streaks and quiet during any call",
-      "body": "Pixel Buddy now keeps a weekly history and counts your break streaks. On macOS it notices a call in any app that is using the microphone, without ever opening the microphone itself, and holds reminders until the call ends. The Chrome extension gained an on/off switch and live timers in its settings."
+      "body": "Pixel Buddy started keeping a weekly history and counting break streaks. On macOS it notices a call in any app that is using the microphone, without ever opening the microphone itself, and holds reminders until the call ends. The Chrome extension gained an on/off switch and live timers in its settings.",
+      "href": "https://github.com/Harshit-Kandoi/pixel-buddy/releases/tag/v1.4.0",
+      "linkLabel": "View release"
     },
     {
-      "id": "2026-11-12-break-notes",
+      "id": "2026-11-12-v1-3",
       "date": "2026-11-12",
       "tag": "Release",
-      "title": "Break notes, buddy moods and quiet during calls",
-      "body": "When a break is due you can jot down what you were doing, and the buddy shows it when you are back. Versions 1.2 and 1.3 also added quiet during calls, a setting for how long without input counts as away, buddy moods, and a fix for Open at Login."
+      "title": "Pixel Buddy 1.3: break notes",
+      "body": "When a break is due you can jot down what you were doing, and the buddy shows it when you are back. Recent notes can be exported as a text file. This release also fixed Open at Login.",
+      "href": "https://github.com/Harshit-Kandoi/pixel-buddy/releases/tag/v1.3.0",
+      "linkLabel": "View release"
+    },
+    {
+      "id": "2026-11-12-v1-2",
+      "date": "2026-11-12",
+      "tag": "Release",
+      "title": "Pixel Buddy 1.2: quiet during calls and buddy moods",
+      "body": "Break and water reminders started waiting until a call ends, and sitting still on a call no longer counts as being away. You can choose how long without input counts as away, the buddy gained moods, and a battery drain was fixed.",
+      "href": "https://github.com/Harshit-Kandoi/pixel-buddy/releases/tag/v1.2.0",
+      "linkLabel": "View release"
     }
   ]
 }

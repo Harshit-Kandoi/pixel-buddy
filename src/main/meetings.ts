@@ -41,6 +41,80 @@ export function micInUseFromHelper(output: string): boolean | null {
   return answer === '1' ? true : answer === '0' ? false : null;
 }
 
+/** `pmset -g assertions`: a video player or browser playing video holds a display-sleep assertion. */
+export function mediaPlayingFromAssertions(output: string): boolean {
+  return /PreventUserIdleDisplaySleep\s+[1-9]/.test(output);
+}
+
+/** `busctl --user list`: the names of media players (browsers, VLC, mpv...) that speak MPRIS. */
+export function mprisPlayers(output: string): string[] {
+  const names = output.split('\n').map((line) => line.trim().split(/\s+/)[0] ?? '');
+  return names.filter((name) => /^org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.-]+$/.test(name)).slice(0, 8);
+}
+
+/** `busctl get-property ... PlaybackStatus` prints `s "Playing"`. */
+export function mprisIsPlaying(output: string): boolean {
+  return /^s\s+"Playing"\s*$/m.test(output);
+}
+
+// Windows: is sound coming out of the default speakers? Playing video (any app or browser)
+// makes the output's peak level rise above zero. Windows exposes this through Core Audio
+// (IAudioMeterInformation); a tiny inline C# call reads it without admin rights or any permission.
+// A video with no sound isn't noticed.
+const WIN_AUDIO_PEAK_SCRIPT = `
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDeviceEnumerator { int EnumAudioEndpoints(int f, int s, out IntPtr d); int GetDefaultAudioEndpoint(int f, int r, out IMMDevice d); }
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDevice { int Activate(ref Guid id, int ctx, IntPtr p, [MarshalAs(UnmanagedType.IUnknown)] out object o); }
+[Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioMeterInformation { int GetPeakValue(out float peak); }
+public static class PixelBuddyAudio {
+  public static float Peak() {
+    var e = (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")));
+    IMMDevice d; e.GetDefaultAudioEndpoint(0, 1, out d);
+    var iid = new Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"); object o; d.Activate(ref iid, 23, IntPtr.Zero, out o);
+    float p; ((IAudioMeterInformation)o).GetPeakValue(out p); return p;
+  }
+}
+"@
+[PixelBuddyAudio]::Peak()
+`;
+const WIN_AUDIO_PEAK_ARGS = [
+  '-NoProfile',
+  '-NonInteractive',
+  '-EncodedCommand',
+  Buffer.from(WIN_AUDIO_PEAK_SCRIPT, 'utf16le').toString('base64'),
+];
+
+/** The script prints the peak level, 0 to 1. Above a whisper means sound is playing. */
+export function soundPlayingFromPeak(output: string): boolean {
+  const peak = Number.parseFloat(output.trim().split(/\s+/).pop() ?? '');
+  return Number.isFinite(peak) && peak > 0.001;
+}
+
+/** How often to check for playing media: Windows starts PowerShell each time, so it checks less often. */
+export const mediaPollMs = (platform: NodeJS.Platform = process.platform): number => (platform === 'win32' ? 20000 : 10000);
+
+/**
+ * Is a video playing? Anything that can't be asked, or fails, counts as no.
+ * - macOS: a playing video holds a display-sleep assertion.
+ * - Windows: sound is coming out of the speakers.
+ * - Linux: a media player (browser, VLC, mpv...) reports "Playing" over MPRIS.
+ */
+export async function detectMediaPlaying(platform: NodeJS.Platform = process.platform): Promise<boolean> {
+  if (platform === 'darwin') return mediaPlayingFromAssertions(await run('/usr/bin/pmset', ['-g', 'assertions']));
+  if (platform === 'win32') return soundPlayingFromPeak(await run('powershell.exe', WIN_AUDIO_PEAK_ARGS));
+  if (platform === 'linux') {
+    for (const name of mprisPlayers(await run('busctl', ['--user', 'list', '--no-legend']))) {
+      const status = await run('busctl', ['--user', 'get-property', name, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', 'PlaybackStatus']);
+      if (mprisIsPlaying(status)) return true;
+    }
+  }
+  return false;
+}
+
 export async function detectMeeting(platform: NodeJS.Platform = process.platform, macHelper = MAC_MIC_HELPER): Promise<boolean> {
   if (platform === 'win32') {
     return micInUseFromRegistry(await run('reg', ['query', MIC_CONSENT_KEY, '/s', '/v', 'LastUsedTimeStop']));

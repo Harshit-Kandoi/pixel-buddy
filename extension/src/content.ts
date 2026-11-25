@@ -163,6 +163,29 @@ const callCheck = setInterval(() => {
 }, MEETING_CHECK_MS);
 window.addEventListener('pagehide', () => { if (reportedCall) reportCall(false); });
 
+// Video playing in this tab (not a call): watching isn't being away, so the worker keeps you
+// "here" while it plays. Same repeat-and-expire scheme as calls.
+const isWatchedVideo = (video: HTMLVideoElement): boolean =>
+  !video.paused && !video.ended && video.readyState > 2 && video.videoWidth > 0 && !isLiveStream(video);
+function videoPlaying(): boolean {
+  if (!document.getElementsByTagName('video').length) return false;
+  return Array.from(document.getElementsByTagName('video')).some(isWatchedVideo);
+}
+let reportedMedia = false;
+let lastMediaReport = 0;
+function reportMedia(active: boolean): void {
+  if (!chrome.runtime?.id) return;
+  if (active === reportedMedia && (!active || Date.now() - lastMediaReport < MEETING_REPEAT_MS)) return;
+  reportedMedia = active;
+  lastMediaReport = Date.now();
+  chrome.runtime.sendMessage({ type: 'media', active }).catch(() => {});
+}
+const mediaCheck = setInterval(() => {
+  if (!chrome.runtime?.id) { clearInterval(mediaCheck); return; }
+  if (enabled) reportMedia(videoPlaying());
+}, MEETING_CHECK_MS);
+window.addEventListener('pagehide', () => { if (reportedMedia) reportMedia(false); });
+
 if (document.documentElement instanceof HTMLElement) {
   const host = location.hostname;
   const read = (stored: Record<string, unknown>): void => {

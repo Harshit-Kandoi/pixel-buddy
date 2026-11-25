@@ -22,6 +22,8 @@ export class Scheduler {
   private buddyHoldTicks = 0;
   private breakActivity: boolean[] = []; // recent seconds of the break: active or not
   private inMeeting = false; // on a call: reminders wait, and sitting still isn't being away
+  private focusSecondsPending = 0; // seconds toward the next focus minute
+  private watchingMedia = false; // a video is playing: watching without touching the keyboard isn't being away
 
   constructor(
     settingsManager: SettingsManager,
@@ -48,15 +50,12 @@ export class Scheduler {
 
     // Start activity tracking
     this.activityMonitor.start(
-      // On long break detected (user was away for the away time and just returned)
-      () => {
-        if (this.inMeeting) return; // listening on a call isn't a break
-        console.log('Smart Reset: User completed an offline break. Resetting work timer.');
-        this.handleReset();
-      },
+      // Returning after being away: the focus timer only paused while away, so it resumes
+      // where it left off (see onActiveResumed). Being away is not a break.
+      () => {},
       // On went idle (no input for the away time)
       () => {
-        if (this.stateMachine.getState() === APP_STATES.WORKING && !this.inMeeting) {
+        if (this.stateMachine.getState() === APP_STATES.WORKING && !this.inMeeting && !this.watchingMedia) {
           this.stateMachine.transitionTo(APP_STATES.IDLE);
         }
       },
@@ -91,6 +90,9 @@ export class Scheduler {
     const settings = this.settingsManager.getSettings();
     if (stateData.isPaused) return;
 
+    // Watching a video counts as being here, even with no keyboard or mouse input.
+    if (this.watchingMedia) this.activityMonitor.markActive();
+
     // 1. Tick the activity monitor
     const awaySeconds = awaySecondsFor(settings.awayMinutes);
     const { isActiveThisSecond } = this.activityMonitor.tick(
@@ -116,6 +118,23 @@ export class Scheduler {
       }
     }
 
+    // Focus time for the dashboard: every second you're at the computer and not on a break.
+    // That includes a break reminder waiting for an answer, a snooze, and the wait after a skip:
+    // you're still working through those. Away time, breaks and pauses don't count. It runs apart
+    // from the work countdown, so resets and skips don't lose partial minutes.
+    if (
+      state === APP_STATES.WORKING ||
+      state === APP_STATES.POPUP ||
+      state === APP_STATES.SNOOZE
+    ) {
+      const present = this.activityMonitor.getContinuousIdleSeconds() < awaySeconds || this.inMeeting;
+      if (present && ++this.focusSecondsPending >= 60) {
+        this.focusSecondsPending = 0;
+        const minutes = this.settingsManager.getSettings().statsFocusMinutesToday ?? 0;
+        this.settingsManager.save({ statsFocusMinutesToday: minutes + 1 });
+      }
+    }
+
     // 3. State-specific logic
     switch (state) {
       case APP_STATES.WORKING: {
@@ -131,13 +150,7 @@ export class Scheduler {
           const idleSeconds = this.activityMonitor.getContinuousIdleSeconds();
           if (idleSeconds < awaySeconds || this.inMeeting) {
             this.stateMachine.incrementWorkTime(1);
-            
-            const currentWorkSecs = this.stateMachine.getData().activeWorkSeconds;
-            if (currentWorkSecs > 0 && currentWorkSecs % 60 === 0) {
-              const currentMinutes = settings.statsFocusMinutesToday ?? 0;
-              this.settingsManager.save({ statsFocusMinutesToday: currentMinutes + 1 });
-            }
-            
+
             const targetWorkSeconds = settings.workDuration * 60;
             if (this.stateMachine.getData().activeWorkSeconds >= targetWorkSeconds && !this.inMeeting) {
               this.stateMachine.transitionTo(APP_STATES.POPUP);
@@ -213,6 +226,14 @@ export class Scheduler {
     this.activityMonitor.markActive();
     if (active && this.stateMachine.getState() === APP_STATES.IDLE) this.stateMachine.transitionTo(APP_STATES.WORKING);
     this.stateMachine.setInMeeting(active);
+  }
+
+  /** A video or other media started or stopped playing. Playing media is presence, not time away; reminders still appear. */
+  public setWatchingMedia(active: boolean): void {
+    if (active === this.watchingMedia) return;
+    this.watchingMedia = active;
+    this.activityMonitor.markActive();
+    if (active && this.stateMachine.getState() === APP_STATES.IDLE) this.stateMachine.transitionTo(APP_STATES.WORKING);
   }
 
   /** The user is using Pixel Buddy itself (clicking it, settings); that isn't coming back to work. */

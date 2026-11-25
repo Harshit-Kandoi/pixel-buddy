@@ -24,7 +24,7 @@ import { SettingsManager } from './settings';
 import type { BuddyAnchor } from '../utils/types';
 import { ActivityMonitor } from './activity';
 import { Scheduler } from './scheduler';
-import { detectMeeting, MEETING_POLL_MS } from './meetings';
+import { detectMeeting, detectMediaPlaying, mediaPollMs, MEETING_POLL_MS } from './meetings';
 import { TrayManager } from './tray';
 import { MEDIA_EXTENSIONS, isMediaFile } from '../utils/mediaFormats';
 
@@ -287,6 +287,21 @@ app.whenReady().then(() => {
   };
   setInterval(() => void checkMeeting(), MEETING_POLL_MS);
   void checkMeeting();
+
+  // Playing video isn't being away: no typing needed while you watch.
+  let mediaCheckBusy = false;
+  const checkMedia = async (): Promise<void> => {
+    if (!settingsManager.getSettings().smartMonitoringEnabled) return scheduler.setWatchingMedia(false);
+    if (mediaCheckBusy) return;
+    mediaCheckBusy = true;
+    try {
+      scheduler.setWatchingMedia(await detectMediaPlaying());
+    } finally {
+      mediaCheckBusy = false;
+    }
+  };
+  setInterval(() => void checkMedia(), mediaPollMs());
+  void checkMedia();
 
   // ---------------------------------
   // IPC Request/Response Setup

@@ -41,7 +41,7 @@ export const DEFAULT_SETTINGS = {
   hydrationDrankToday: 0,
   hydrationLastResetDate: null as string | null,
   smartMonitoringEnabled: true,
-  awayMinutes: 5, // no input this long = away (and being away this long counts as a break)
+  awayMinutes: 5, // no input this long = away (the focus timer pauses until you're back)
   meetingAware: true,
   showMoods: true, // 🎧 on a call, ✨ after a break, 😪 after a skipped one // hold break and water reminders while you're on a call
   statsFocusMinutesToday: 0,
