@@ -413,9 +413,12 @@ try {
   for (const t of (await targets()).filter((t) => t.type === "page" && (t.url.startsWith(origin) || t.targetId === pageId))) await send("Target.closeTarget", { targetId: t.targetId });
   // The offscreen audio page (left open by the reminder chime) keeps the worker alive; close it too.
   await evaluate(worker, `chrome.offscreen.closeDocument().catch(() => {})`).catch(() => {});
-  const workerTarget = (await targets()).find((t) => t.type === "service_worker" && t.url.startsWith(origin));
-  await send("Target.closeTarget", { targetId: workerTarget.targetId }).catch(() => {});
-  await waitFor(async () => !(await targets()).some((t) => t.type === "service_worker" && t.url.startsWith(origin)), "the worker to stop", 15000);
+  // Chrome can wake the worker again right after it's closed (a late alarm or message), so keep closing it until it stays down.
+  await waitFor(async () => {
+    const running = (await targets()).filter((t) => t.type === "service_worker" && t.url.startsWith(origin));
+    for (const t of running) await send("Target.closeTarget", { targetId: t.targetId }).catch(() => {});
+    return running.length === 0;
+  }, "the worker to stop", 30000);
   const { targetId: freshId } = await send("Target.createTarget", { url: `${origin}/popup.html` });
   const fresh = await attach(freshId);
   const upgraded = await waitFor(() => evaluate(fresh, `window.api?.getSettings().then(s => s && ({ work: s.workDuration, name: s.userName, skin: s.avatarSkin, askAt: s.reviewAskAt, lifetime: s.lifetimeBreaksCompleted, away: s.awayMinutes, calls: s.meetingAware }))`), "upgraded settings");
